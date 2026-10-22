@@ -1,0 +1,217 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --bg-deep: #05070d;
+  --bg-card: #0b0f19;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-focus: rgba(59, 130, 246, 0.5);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background-color: var(--bg-deep);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Minimalist Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Minimalist Glass Surfaces */
+.glass-panel {
+  background: rgba(11, 15, 25, 0.72) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border-subtle) !important;
+}
+
+.glass-nav {
+  background: rgba(5, 7, 13, 0.82) !important;
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+/* Modern Minimalist Album Tiles */
+.minimal-album-card {
+  position: relative;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.minimal-album-card:hover {
+  transform: translateY(-3px);
+}
+
+.minimal-album-thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: #0b0f19;
+  position: relative;
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.2s ease;
+}
+
+.minimal-album-card:hover .minimal-album-thumb {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.minimal-album-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.minimal-album-card:hover .minimal-album-img {
+  transform: scale(1.04);
+}
+
+/* Modern Minimalist Media Grid Tiles */
+.minimal-media-tile {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  background-color: #0b0f19;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.minimal-media-tile:hover {
+  transform: scale(1.015);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.minimal-media-tile.is-selected {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px #3b82f6 !important;
+}
+
+.minimal-media-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.minimal-media-tile:hover .minimal-media-img {
+  transform: scale(1.03);
+}
+
+/* Checkbox overlay */
+.minimal-check-overlay {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 4;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  background: rgba(5, 7, 13, 0.65);
+  backdrop-filter: blur(8px);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.minimal-media-tile:hover .minimal-check-overlay,
+.minimal-media-tile.is-selected .minimal-check-overlay {
+  opacity: 1;
+}
+
+/* Badges */
+.minimal-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  z-index: 4;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(8px);
+}
+
+.badge-video {
+  background: rgba(139, 92, 246, 0.85);
+  color: #ffffff;
+}
+
+.badge-image {
+  background: rgba(15, 23, 42, 0.85);
+  color: #cbd5e1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Floating Batch Bar (Minimalist Pill) */
+.floating-batch-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  background: rgba(11, 15, 25, 0.92);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+  border-radius: 9999px;
+  padding: 6px 18px;
+}
+
+/* Stealth Trigger Word */
+.stealth-trigger-word {
+  cursor: pointer;
+  user-select: text;
+  display: inline;
+  transition: color 0.15s ease;
+}
+
+.stealth-trigger-word:hover {
+  color: #60a5fa;
+}
+
+/* Lightbox HUD and Controls */
+.viewer-top-bar, .viewer-bottom-bar {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.viewer-hud-hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+}
