@@ -4,6 +4,11 @@ import { defineStore } from 'pinia'
 const uploadFilesById = new Map()
 const uploadXhrById = new Map()
 const MAX_PARALLEL_UPLOADS = 2
+const MAX_UPLOAD_ATTEMPTS = 3
+const UPLOAD_STALL_MS = 60 * 1000 // no bytes moving for this long: abort and retry
+const UPLOAD_REPLY_MS = 120 * 1000 // all bytes sent but no reply for this long: abort and retry
+const uploadMeta = new Map() // id -> { lastProgressAt, sentAt, reason }
+let uploadWatchdog = null
 let uploadSeq = 0
 let undoTimer = null
 
@@ -394,28 +399,64 @@ export const useVaultStore = defineStore('vault', {
       return false
     },
 
-    // ---- Upload queue (per-file progress, 2 in parallel, retry on failure) ----
+    // ---- Upload queue: per-file progress, 2 in parallel, automatic retry, stall detection ----
+    // Statuses: queued | uploading | done | skipped (already in the album) | error.
+    // Retrying is safe because the server skips content it already has.
     uploadFiles(albumId, fileList) {
+      let duplicates = 0
       for (const file of Array.from(fileList)) {
+        const sig = `${albumId}|${file.name}|${file.size}|${file.lastModified}`
+        // The same file picked twice while it is still in the panel is ignored
+        if (this.uploads.some(u => u.sig === sig && u.status !== 'error')) {
+          duplicates++
+          continue
+        }
         const id = `up-${++uploadSeq}`
         uploadFilesById.set(id, file)
-        this.uploads.push({ id, albumId, name: file.name, size: file.size, progress: 0, status: 'queued' })
+        this.uploads.push({ id, sig, albumId, name: file.name, size: file.size, progress: 0, status: 'queued', attempts: 0, notBefore: 0, note: '' })
       }
+      if (duplicates) this.showNotice(`${duplicates} duplicate ${duplicates === 1 ? 'file' : 'files'} ignored`, 'info')
+      this.ensureUploadWatchdog()
       this.processUploads()
       return true
     },
 
+    // Also runs once a second while uploads exist: starts delayed retries and guarantees the
+    // queue can never sit idle with work left in it.
+    ensureUploadWatchdog() {
+      if (uploadWatchdog) return
+      uploadWatchdog = setInterval(() => {
+        if (!this.uploads.length) {
+          clearInterval(uploadWatchdog)
+          uploadWatchdog = null
+          return
+        }
+        const now = Date.now()
+        for (const u of this.uploads) {
+          const meta = uploadMeta.get(u.id)
+          if (u.status !== 'uploading' || !meta) continue
+          if (meta.sentAt ? now - meta.sentAt > UPLOAD_REPLY_MS : now - meta.lastProgressAt > UPLOAD_STALL_MS) {
+            meta.reason = 'Timed out'
+            uploadXhrById.get(u.id)?.abort()
+          }
+        }
+        this.processUploads()
+      }, 1000)
+    },
+
     processUploads() {
+      if (this._cancellingUploads) return
+      const now = Date.now()
       let running = this.uploads.filter(u => u.status === 'uploading').length
       for (const u of this.uploads) {
         if (running >= MAX_PARALLEL_UPLOADS) break
-        if (u.status === 'queued') {
+        if (u.status === 'queued' && u.notBefore <= now) {
           this.startUpload(u.id)
           running++
         }
       }
-      const busy = this.uploads.some(u => u.status === 'queued' || u.status === 'uploading')
-      if (!busy && this.uploads.length && !this._uploadBatchSettled) {
+      const pending = this.uploads.some(u => u.status === 'queued' || u.status === 'uploading')
+      if (!pending && this.uploads.length && !this._uploadBatchSettled) {
         this._uploadBatchSettled = true
         this.finishUploadBatch()
       }
@@ -423,41 +464,90 @@ export const useVaultStore = defineStore('vault', {
 
     startUpload(id) {
       const u = this.uploads.find(x => x.id === id)
+      if (!u) return
       const file = uploadFilesById.get(id)
-      if (!u || !file) return
+      if (!file) {
+        u.status = 'error'
+        u.note = 'File is no longer available'
+        return
+      }
       this._uploadBatchSettled = false
       u.status = 'uploading'
       u.progress = 0
+      u.note = u.attempts ? `Attempt ${u.attempts + 1}` : ''
+      u.attempts++
+      uploadMeta.set(id, { lastProgressAt: Date.now(), sentAt: 0, reason: '' })
 
       const xhr = new XMLHttpRequest()
       uploadXhrById.set(id, xhr)
       const form = new FormData()
       form.append('files', file)
       xhr.open('POST', `/api/albums/${u.albumId}/upload`)
+      xhr.timeout = 10 * 60 * 1000
+
       xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) u.progress = e.loaded / e.total
+        const meta = uploadMeta.get(id)
+        if (!meta || !e.lengthComputable) return
+        u.progress = e.loaded / e.total
+        meta.lastProgressAt = Date.now()
+        if (e.loaded >= e.total && !meta.sentAt) meta.sentAt = Date.now()
       }
-      const settle = (ok) => {
+
+      const cleanup = () => {
         uploadXhrById.delete(id)
-        if (u.status === 'canceled') { this.processUploads(); return }
-        u.status = ok ? 'done' : 'error'
-        if (ok) { u.progress = 1; uploadFilesById.delete(id) }
+        const meta = uploadMeta.get(id)
+        uploadMeta.delete(id)
+        return meta
+      }
+      const fail = (retryable, message) => {
+        cleanup()
+        if (u.status === 'canceled') return
+        if (retryable && u.attempts < MAX_UPLOAD_ATTEMPTS) {
+          u.status = 'queued'
+          u.progress = 0
+          u.note = `${message}, retrying`
+          u.notBefore = Date.now() + u.attempts * 2000
+        } else {
+          u.status = 'error'
+          u.note = message
+        }
         this.processUploads()
       }
-      xhr.onload = () => settle(xhr.status >= 200 && xhr.status < 300)
-      xhr.onerror = () => settle(false)
-      xhr.onabort = () => settle(false)
+
+      xhr.onload = () => {
+        if (u.status === 'canceled') return
+        if (xhr.status >= 200 && xhr.status < 300) {
+          cleanup()
+          let body = {}
+          try { body = JSON.parse(xhr.responseText) } catch { /* an empty body still means success */ }
+          u.progress = 1
+          u.status = body.skipped?.length ? 'skipped' : 'done'
+          u.note = body.skipped?.length ? 'Already in this album' : ''
+          uploadFilesById.delete(id)
+          this.processUploads()
+        } else {
+          fail(xhr.status >= 500 || xhr.status === 408 || xhr.status === 429, `Server error ${xhr.status}`)
+        }
+      }
+      xhr.onerror = () => fail(true, 'Network error')
+      xhr.ontimeout = () => fail(true, 'Timed out')
+      xhr.onabort = () => fail(true, uploadMeta.get(id)?.reason || 'Interrupted')
       xhr.send(form)
     },
 
     async finishUploadBatch() {
-      const done = this.uploads.filter(u => u.status === 'done').length
-      const failed = this.uploads.filter(u => u.status === 'error').length
+      const count = (status) => this.uploads.filter(u => u.status === status).length
+      const done = count('done')
+      const skipped = count('skipped')
+      const failed = count('error')
       const albumIds = new Set(this.uploads.filter(u => u.status === 'done').map(u => u.albumId))
       if (this.activeAlbum && albumIds.has(this.activeAlbum.id)) await this.fetchMedia(this.activeAlbum.id)
       await Promise.all([this.fetchAlbums(), this.fetchVaultStats()])
-      if (failed) this.showNotice(`${done} uploaded, ${failed} failed`, 'error')
-      else if (done) this.showNotice(`Uploaded ${done} ${done === 1 ? 'file' : 'files'}`, 'success')
+      const parts = []
+      if (done) parts.push(`${done} uploaded`)
+      if (skipped) parts.push(`${skipped} already there`)
+      if (failed) parts.push(`${failed} failed`)
+      if (parts.length) this.showNotice(parts.join(' · '), failed ? 'error' : 'success')
     },
 
     retryUpload(id) {
@@ -465,6 +555,10 @@ export const useVaultStore = defineStore('vault', {
       if (u && u.status === 'error' && uploadFilesById.has(id)) {
         u.status = 'queued'
         u.progress = 0
+        u.attempts = 0
+        u.note = ''
+        u.notBefore = 0
+        this.ensureUploadWatchdog()
         this.processUploads()
       }
     },
@@ -473,27 +567,45 @@ export const useVaultStore = defineStore('vault', {
       this.uploads.filter(u => u.status === 'error').forEach(u => this.retryUpload(u.id))
     },
 
+    // Removes one upload from the panel; if it is running it is aborted
     cancelUpload(id) {
       const u = this.uploads.find(x => x.id === id)
       if (!u) return
-      if (u.status === 'uploading') {
-        u.status = 'canceled'
-        uploadXhrById.get(id)?.abort()
-      }
+      const wasRunning = u.status === 'uploading'
+      u.status = 'canceled'
+      if (wasRunning) uploadXhrById.get(id)?.abort()
+      uploadXhrById.delete(id)
+      uploadMeta.delete(id)
       uploadFilesById.delete(id)
       this.uploads = this.uploads.filter(x => x.id !== id)
       this.processUploads()
     },
 
+    // Stops everything and empties the panel. Nothing may start again while this runs.
     cancelAllUploads() {
+      this._cancellingUploads = true
+      const albumIds = new Set(this.uploads.map(u => u.albumId))
+      for (const u of this.uploads) {
+        if (u.status === 'queued' || u.status === 'uploading') u.status = 'canceled'
+      }
       for (const xhr of uploadXhrById.values()) { try { xhr.abort() } catch { /* ignore */ } }
       uploadXhrById.clear()
+      uploadMeta.clear()
       uploadFilesById.clear()
       this.uploads = []
       this._uploadBatchSettled = false
+      this._cancellingUploads = false
+      // Some files may have landed before the cancel: show what is really there
+      if (this.isAuthenticated) {
+        if (this.activeAlbum && albumIds.has(this.activeAlbum.id)) this.fetchMedia(this.activeAlbum.id)
+        this.fetchAlbums()
+        this.fetchVaultStats()
+      }
     },
 
+    // Clears finished rows (done, skipped, failed); running and waiting ones stay
     dismissUploads() {
+      this.uploads.filter(u => !(u.status === 'queued' || u.status === 'uploading')).forEach(u => uploadFilesById.delete(u.id))
       this.uploads = this.uploads.filter(u => u.status === 'queued' || u.status === 'uploading')
     },
 

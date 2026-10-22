@@ -8,11 +8,11 @@
           <span>{{ headline }}</span>
         </div>
         <div class="uploads-tools">
-          <button v-if="failed && !busy" class="ax-btn is-sm is-ghost" @click="store.retryFailedUploads">Retry failed</button>
-          <button class="ax-icon-btn" :title="collapsed ? 'Expand' : 'Collapse'" @click="collapsed = !collapsed">
+          <button v-if="failed && !busy" type="button" class="ax-btn is-sm is-ghost" @click="store.retryFailedUploads()">Retry failed</button>
+          <button type="button" class="ax-icon-btn" :title="collapsed ? 'Expand' : 'Minimize'" :aria-expanded="!collapsed" @click.stop="collapsed = !collapsed">
             <v-icon :icon="collapsed ? 'mdi-chevron-up' : 'mdi-chevron-down'" size="18"></v-icon>
           </button>
-          <button class="ax-icon-btn" :title="busy ? 'Cancel all' : 'Dismiss'" @click="busy ? store.cancelAllUploads() : store.dismissUploads()">
+          <button type="button" class="ax-icon-btn" :title="busy ? 'Cancel all uploads' : 'Close'" @click.stop="closePanel">
             <v-icon icon="mdi-close" size="17"></v-icon>
           </button>
         </div>
@@ -22,15 +22,11 @@
 
       <ul v-show="!collapsed" class="uploads-list">
         <li v-for="u in store.uploads" :key="u.id" class="item" :class="`is-${u.status}`">
-          <span class="item-name text-truncate">{{ u.name }}</span>
-          <span class="item-state font-mono tabular">
-            <template v-if="u.status === 'uploading'">{{ Math.round(u.progress * 100) }}%</template>
-            <template v-else-if="u.status === 'queued'">Queued</template>
-            <template v-else-if="u.status === 'done'"><v-icon icon="mdi-check" size="14"></v-icon></template>
-            <template v-else>Failed</template>
-          </span>
-          <button v-if="u.status === 'error'" class="ax-icon-btn mini" title="Retry" @click="store.retryUpload(u.id)"><v-icon icon="mdi-refresh" size="14"></v-icon></button>
-          <button v-else-if="u.status !== 'done'" class="ax-icon-btn mini" title="Cancel" @click="store.cancelUpload(u.id)"><v-icon icon="mdi-close" size="14"></v-icon></button>
+          <span class="item-name text-truncate" :title="u.note || u.name">{{ u.name }}</span>
+          <span class="item-state font-mono tabular">{{ stateLabel(u) }}</span>
+          <button v-if="u.status === 'error'" type="button" class="ax-icon-btn mini" title="Retry" @click="store.retryUpload(u.id)"><v-icon icon="mdi-refresh" size="14"></v-icon></button>
+          <button v-else-if="u.status === 'queued' || u.status === 'uploading'" type="button" class="ax-icon-btn mini" title="Cancel" @click="store.cancelUpload(u.id)"><v-icon icon="mdi-close" size="14"></v-icon></button>
+          <span v-else class="mini-spacer"></span>
           <div v-if="u.status === 'uploading'" class="item-bar"><span :style="{ width: `${u.progress * 100}%` }"></span></div>
         </li>
       </ul>
@@ -45,25 +41,44 @@ import { useVaultStore } from '../stores/vaultStore'
 const store = useVaultStore()
 const collapsed = ref(false)
 
+const count = (status) => store.uploads.filter(u => u.status === status).length
 const busy = computed(() => store.uploads.some(u => u.status === 'queued' || u.status === 'uploading'))
-const failed = computed(() => store.uploads.filter(u => u.status === 'error').length)
-const doneCount = computed(() => store.uploads.filter(u => u.status === 'done').length)
+const failed = computed(() => count('error'))
+const finished = computed(() => store.uploads.filter(u => ['done', 'skipped', 'error'].includes(u.status)).length)
 const overall = computed(() => {
   const list = store.uploads
   if (!list.length) return 0
-  return list.reduce((acc, u) => acc + (u.status === 'done' ? 1 : u.progress), 0) / list.length
+  return list.reduce((acc, u) => acc + (['done', 'skipped', 'error'].includes(u.status) ? 1 : u.progress), 0) / list.length
 })
+
 const headline = computed(() => {
   const total = store.uploads.length
-  if (busy.value) return `Uploading ${doneCount.value + 1 > total ? total : doneCount.value + 1} of ${total}`
-  if (failed.value) return `${failed.value} failed`
-  return `${doneCount.value} ${doneCount.value === 1 ? 'file' : 'files'} uploaded`
+  if (busy.value) return `Uploading ${Math.min(finished.value + 1, total)} of ${total}`
+  const parts = []
+  if (count('done')) parts.push(`${count('done')} uploaded`)
+  if (count('skipped')) parts.push(`${count('skipped')} already there`)
+  if (failed.value) parts.push(`${failed.value} failed`)
+  return parts.join(' · ') || 'Done'
 })
+
+function stateLabel(u) {
+  if (u.status === 'uploading') return u.progress >= 1 ? 'Processing' : `${Math.round(u.progress * 100)}%`
+  if (u.status === 'queued') return u.note ? 'Retrying' : 'Queued'
+  if (u.status === 'done') return '✓'
+  if (u.status === 'skipped') return 'Duplicate'
+  return 'Failed'
+}
+
+// While uploads are running the X cancels them; once finished it simply clears the panel
+function closePanel() {
+  if (busy.value) store.cancelAllUploads()
+  else store.dismissUploads()
+}
 </script>
 
 <style scoped>
 .uploads {
-  position: fixed; z-index: 1200; right: 20px; bottom: 20px; width: 340px; max-width: calc(100vw - 24px);
+  position: fixed; z-index: 2500; right: 20px; bottom: 20px; width: 340px; max-width: calc(100vw - 24px);
   border-radius: 14px; overflow: hidden; background: rgb(var(--v-theme-surface-bright));
   border: 1px solid var(--ax-line-strong); box-shadow: var(--ax-shadow-lg);
 }
@@ -86,6 +101,9 @@ const headline = computed(() => {
 .item-bar { position: absolute; left: 14px; right: 8px; bottom: 2px; height: 2px; border-radius: 2px; background: var(--ax-line); }
 .item-bar span { display: block; height: 100%; border-radius: 2px; background: var(--ax-accent); }
 .mini { width: 24px; height: 24px; }
+.mini-spacer { width: 24px; flex: none; }
+.item.is-skipped .item-state { color: var(--ax-text-3); }
+.item.is-skipped .item-name { color: var(--ax-text-3); }
 .panel-enter-active, .panel-leave-active { transition: opacity 0.2s var(--ax-ease), transform 0.2s var(--ax-ease); }
 .panel-enter-from, .panel-leave-to { opacity: 0; transform: translateY(10px); }
 @media (max-width: 560px) { .uploads { right: 12px; left: 12px; width: auto; bottom: 84px; } }

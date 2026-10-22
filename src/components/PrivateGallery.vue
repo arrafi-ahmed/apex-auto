@@ -15,7 +15,7 @@
         </nav>
 
         <div class="topbar-actions">
-          <div class="lock-chip font-mono" :class="{ 'is-low': store.secondsRemainingUntilAutoLock <= 60 }" :title="`Auto-lock in ${formatLockCountdown(store.secondsRemainingUntilAutoLock)}`">
+          <div class="lock-chip font-mono" :class="{ 'is-low': store.secondsRemainingUntilAutoLock < 120 }" :title="`Auto-lock in ${formatLockCountdown(store.secondsRemainingUntilAutoLock)}`">
             <span class="lock-dot"></span>{{ formatLockCountdown(store.secondsRemainingUntilAutoLock) }}
           </div>
           <button class="ax-icon-btn" title="Preferences" @click="store.settingsModalOpen = true">
@@ -729,8 +729,8 @@ onUnmounted(() => {
   display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; margin-right: 6px;
   border-radius: 999px; border: 1px solid var(--ax-line); color: var(--ax-text-2); font-size: 12px;
 }
-.lock-chip.is-low { color: rgb(var(--v-theme-warning)); border-color: rgba(var(--v-theme-warning), 0.4); }
-.lock-chip.is-low .lock-dot { background: rgb(var(--v-theme-warning)); box-shadow: 0 0 0 3px rgba(var(--v-theme-warning), 0.18); }
+.lock-chip.is-low { color: var(--ax-danger); border-color: rgba(var(--v-theme-error), 0.45); }
+.lock-chip.is-low .lock-dot { background: var(--ax-danger); box-shadow: 0 0 0 3px rgba(var(--v-theme-error), 0.2); }
 .lock-dot { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--v-theme-success)); box-shadow: 0 0 0 3px rgba(var(--v-theme-success), 0.18); }
 
 /* ── Page ── */

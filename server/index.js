@@ -661,38 +661,96 @@ app.get('/api/albums/:albumId/media', requireAuth, async (req, res) => {
   res.json(items)
 })
 
+// SHA-256 of a file on disk (streamed, so large videos are fine)
+function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256')
+    fs.createReadStream(filePath)
+      .on('data', chunk => hash.update(chunk))
+      .on('end', () => resolve(hash.digest('hex')))
+      .on('error', reject)
+  })
+}
+
+// Uploads skip anything already in the album: identical content (SHA-256, with file size as a
+// cheap pre-filter) is a duplicate whatever it is called. That also makes client retries safe.
 app.post('/api/albums/:albumId/upload', requireAuth, upload.array('files', 50), async (req, res) => {
   const { albumId } = req.params
-  if (!loadDB().albums.some(a => a.id === albumId)) return res.status(404).json({ error: 'Album not found' })
+  const files = req.files || []
+  const discard = (file) => { try { fs.unlinkSync(file.path) } catch { /* already gone */ } }
 
-  const uploadedMedia = []
-  for (const file of req.files) {
-    const item = {
-      id: `media-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      albumId,
-      filename: file.filename,
-      originalName: file.originalname,
-      mimeType: file.mimetype,
-      size: file.size,
-      isVideo: file.mimetype.startsWith('video/'),
-      title: path.parse(file.originalname).name,
-      createdAt: new Date().toISOString()
+  if (!loadDB().albums.some(a => a.id === albumId)) {
+    files.forEach(discard)
+    return res.status(404).json({ error: 'Album not found' })
+  }
+
+  try {
+    const hashes = await Promise.all(files.map(f => sha256File(f.path)))
+
+    // Older uploads have no stored hash: compute it for same-sized files only, then remember it
+    const sizes = new Set(files.map(f => f.size))
+    const legacy = loadDB().media.filter(m => m.albumId === albumId && isLive(m) && !m.hash && sizes.has(m.size))
+    if (legacy.length) {
+      const found = new Map(await Promise.all(legacy.map(async (m) => {
+        try { return [m.id, await sha256File(getSafeUploadPath(m.filename))] } catch { return [m.id, null] }
+      })))
+      const snapshot = loadDB()
+      for (const m of snapshot.media) if (found.get(m.id)) m.hash = found.get(m.id)
+      saveDB(snapshot)
     }
-    Object.assign(item, await probeMedia(item), { probed: true })
-    uploadedMedia.push(item)
-  }
 
-  const db = loadDB()
-  const album = db.albums.find(a => a.id === albumId)
-  if (!album) return res.status(404).json({ error: 'Album not found' })
-  db.media.unshift(...uploadedMedia)
-  if (!album.coverId && uploadedMedia.length > 0) {
-    album.coverId = uploadedMedia[0].id
-  }
-  album.updatedAt = new Date().toISOString()
-  saveDB(db)
+    // Build the records (probing is async), then do the check-and-save in one synchronous step
+    const prepared = []
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      const item = {
+        id: `media-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        albumId,
+        filename: file.filename,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+        hash: hashes[i],
+        isVideo: file.mimetype.startsWith('video/'),
+        title: path.parse(file.originalname).name,
+        createdAt: new Date().toISOString()
+      }
+      Object.assign(item, await probeMedia(item), { probed: true })
+      prepared.push({ file, item })
+    }
 
-  res.json({ success: true, count: uploadedMedia.length, media: uploadedMedia })
+    const db = loadDB()
+    const album = db.albums.find(a => a.id === albumId)
+    if (!album) {
+      files.forEach(discard)
+      return res.status(404).json({ error: 'Album not found' })
+    }
+    const known = new Map(db.media.filter(m => m.albumId === albumId && isLive(m) && m.hash).map(m => [m.hash, m]))
+    const added = []
+    const skipped = []
+    for (const { file, item } of prepared) {
+      const duplicate = known.get(item.hash)
+      if (duplicate) {
+        skipped.push({ name: file.originalname, duplicateOf: duplicate.id })
+        discard(file)
+        continue
+      }
+      known.set(item.hash, item)
+      added.push(item)
+    }
+
+    if (added.length) {
+      db.media.unshift(...added)
+      if (!album.coverId) album.coverId = added[0].id
+      album.updatedAt = new Date().toISOString()
+      saveDB(db)
+    }
+    res.json({ success: true, count: added.length, media: added, skipped })
+  } catch (err) {
+    files.forEach(discard)
+    console.error('[UPLOAD] Failed:', err.message)
+    res.status(500).json({ error: 'Upload failed' })
+  }
 })
 
 // Soft delete with undo: items are hidden immediately and purged after TRASH_GRACE_MS
