@@ -16,6 +16,14 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true
       },
+      '/news-img': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/thumb': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
       '/media-stream': {
         target: 'http://localhost:3000',
         changeOrigin: true

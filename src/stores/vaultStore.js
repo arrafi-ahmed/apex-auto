@@ -1,5 +1,12 @@
 import { defineStore } from 'pinia'
 
+// File handles and XHRs are kept out of reactive state
+const uploadFilesById = new Map()
+const uploadXhrById = new Map()
+const MAX_PARALLEL_UPLOADS = 2
+let uploadSeq = 0
+let undoTimer = null
+
 export const useVaultStore = defineStore('vault', {
   state: () => ({
     isAuthenticated: false,
@@ -15,6 +22,11 @@ export const useVaultStore = defineStore('vault', {
     loadingAlbums: false,
     loadingMedia: false,
 
+    // Album view filters (what the grid shows is also what the viewer/slideshow steps through)
+    mediaFilter: 'all', // all | images | videos | favorites
+    mediaSort: 'newest', // newest | oldest | size-desc | name-asc
+    mediaQuery: '',
+
     // Batch Operations State
     isBatchMode: false,
     selectedMediaIds: [],
@@ -24,12 +36,22 @@ export const useVaultStore = defineStore('vault', {
     viewerActiveIndex: 0,
     slideshowPlaying: false,
     slideshowInterval: 3, // seconds
+    slideshowShuffle: false,
     skipVideosInSlideshow: true,
     isFullscreen: false,
 
-    // Admin & UI View Mode ('gallery' | 'manager')
+    // Admin & UI View Mode ('gallery' | 'manager' | 'logs')
     adminViewMode: 'gallery',
     vaultStats: null,
+
+    // Audit Logs & Sign-in Tracking
+    auditLogs: [],
+    lastLoginTime: null,
+    previousLoginTime: null,
+    currentClientIp: '',
+    totalLogins: 0,
+    failedAttempts: 0,
+    loadingLogs: false,
 
     // Security & Inactivity Lockout State
     autoLockMinutes: 5,
@@ -37,27 +59,97 @@ export const useVaultStore = defineStore('vault', {
     lastActivityTimestamp: Date.now(),
     secondsRemainingUntilAutoLock: 300,
 
-    // Error and Notice
+    // Upload queue: { id, albumId, name, size, progress (0-1), status: queued|uploading|done|error }
+    uploads: [],
+
+    // Error and Notice (an optional action renders as a button, e.g. Undo)
     noticeMessage: '',
-    noticeColor: 'info'
+    noticeColor: 'info',
+    noticeAction: null,
+    noticeSeq: 0
   }),
 
   getters: {
     selectedCount: (state) => state.selectedMediaIds.length,
-    activeMediaItem: (state) => {
-      if (!state.currentMedia.length || state.viewerActiveIndex < 0) return null
-      return state.currentMedia[state.viewerActiveIndex] || null
+    displayMedia: (state) => {
+      let list = state.currentMedia
+      if (state.mediaFilter === 'images') list = list.filter(m => !m.isVideo)
+      else if (state.mediaFilter === 'videos') list = list.filter(m => m.isVideo)
+      else if (state.mediaFilter === 'favorites') list = list.filter(m => m.favorite)
+
+      const q = state.mediaQuery.trim().toLowerCase()
+      if (q) {
+        list = list.filter(m =>
+          (m.title && m.title.toLowerCase().includes(q)) ||
+          (m.originalName && m.originalName.toLowerCase().includes(q))
+        )
+      }
+
+      const time = (m) => new Date(m.createdAt || 0).getTime()
+      const name = (m) => m.title || m.originalName || ''
+      const sorters = {
+        newest: (a, b) => time(b) - time(a),
+        oldest: (a, b) => time(a) - time(b),
+        'size-desc': (a, b) => (b.size || 0) - (a.size || 0),
+        'name-asc': (a, b) => name(a).localeCompare(name(b))
+      }
+      return [...list].sort(sorters[state.mediaSort] || sorters.newest)
     },
-    slideshowEligibleMedia: (state) => {
-      if (!state.skipVideosInSlideshow) return state.currentMedia
-      return state.currentMedia.filter(m => !m.isVideo)
+    activeMediaItem() {
+      const list = this.displayMedia
+      if (!list.length || this.viewerActiveIndex < 0) return null
+      return list[this.viewerActiveIndex] || null
     }
   },
 
   actions: {
-    showNotice(msg, color = 'info') {
+    showNotice(msg, color = 'info', action = null) {
       this.noticeMessage = msg
       this.noticeColor = color
+      this.noticeAction = action
+      this.noticeSeq++
+    },
+
+    // ---- Browser history: Back closes the viewer, then the album, instead of leaving the app.
+    // Entries carry state only (the URL never changes), so nothing reveals the vault.
+    pushNav(kind) {
+      try { history.pushState({ ax: kind }, '') } catch { /* ignore */ }
+    },
+
+    handlePopState() {
+      if (!this.isAuthenticated) return
+      if (this.viewerOpen) {
+        this.finishCloseViewer()
+      } else if (this.activeAlbum) {
+        this.activeAlbum = null
+        this.selectedMediaIds = []
+      }
+    },
+
+    leaveAlbum() {
+      if (history.state?.ax === 'album') {
+        history.back()
+      } else {
+        this.activeAlbum = null
+        this.selectedMediaIds = []
+      }
+    },
+
+    // Pulls the saved preferences so the auto-lock countdown and slideshow match the server
+    async fetchSettings() {
+      try {
+        const res = await fetch('/api/settings')
+        if (!res.ok) return
+        const data = await res.json()
+        this.slideshowInterval = data.slideshowInterval || this.slideshowInterval
+        this.skipVideosInSlideshow = data.skipVideosInSlideshow !== false
+        this.autoLockMinutes = data.autoLockMinutes || this.autoLockMinutes
+        this.triggerWord = data.secretTriggerWord || this.triggerWord
+        this.registerActivity()
+        this.updateInactivityCountdown()
+      } catch (err) {
+        console.error('Fetch settings error', err)
+      }
     },
 
     async checkStatus() {
@@ -71,7 +163,11 @@ export const useVaultStore = defineStore('vault', {
           const data = await res.json()
           this.isAuthenticated = data.authenticated
           if (this.isAuthenticated) {
-            await this.fetchAlbums()
+            await Promise.all([
+              this.fetchSettings(),
+              this.fetchAlbums(),
+              this.fetchAuditLogs()
+            ])
           }
         }
       } catch (err) {
@@ -98,11 +194,21 @@ export const useVaultStore = defineStore('vault', {
           const data = await res.json()
           this.isAuthenticated = true
           this.authModalOpen = false
+          if (data.lastLogin) {
+            this.lastLoginTime = data.lastLogin
+          }
           if (data.settings) {
             this.slideshowInterval = data.settings.slideshowInterval || 3
             this.skipVideosInSlideshow = data.settings.skipVideosInSlideshow !== false
+            this.autoLockMinutes = data.settings.autoLockMinutes || this.autoLockMinutes
           }
-          await this.fetchAlbums()
+          this.registerActivity()
+          this.updateInactivityCountdown()
+          await Promise.all([
+            this.fetchSettings(),
+            this.fetchAlbums(),
+            this.fetchAuditLogs()
+          ])
           return true
         } else {
           // Fallback lockout on invalid status
@@ -140,6 +246,9 @@ export const useVaultStore = defineStore('vault', {
       this.activeAlbum = null
       this.selectedMediaIds = []
       this.isBatchMode = false
+      this.cancelAllUploads()
+      this.noticeMessage = ''
+      this.noticeAction = null
       try {
         if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
           navigator.sendBeacon('/api/auth/logout')
@@ -208,8 +317,10 @@ export const useVaultStore = defineStore('vault', {
 
     async selectAlbum(album) {
       this.activeAlbum = album
+      this.currentMedia = []
       this.selectedMediaIds = []
       this.isBatchMode = false
+      this.pushNav('album')
       await this.fetchMedia(album.id)
     },
 
@@ -283,26 +394,165 @@ export const useVaultStore = defineStore('vault', {
       return false
     },
 
-    async uploadFiles(albumId, fileList) {
-      const formData = new FormData()
-      for (let i = 0; i < fileList.length; i++) {
-        formData.append('files', fileList[i])
+    // ---- Upload queue (per-file progress, 2 in parallel, retry on failure) ----
+    uploadFiles(albumId, fileList) {
+      for (const file of Array.from(fileList)) {
+        const id = `up-${++uploadSeq}`
+        uploadFilesById.set(id, file)
+        this.uploads.push({ id, albumId, name: file.name, size: file.size, progress: 0, status: 'queued' })
       }
-      try {
-        const res = await fetch(`/api/albums/${albumId}/upload`, {
-          method: 'POST',
-          body: formData
-        })
-        if (res.ok) {
-          await this.fetchMedia(albumId)
-          await this.fetchAlbums()
-          this.showNotice(`Uploaded ${fileList.length} files successfully`, 'success')
-          return true
+      this.processUploads()
+      return true
+    },
+
+    processUploads() {
+      let running = this.uploads.filter(u => u.status === 'uploading').length
+      for (const u of this.uploads) {
+        if (running >= MAX_PARALLEL_UPLOADS) break
+        if (u.status === 'queued') {
+          this.startUpload(u.id)
+          running++
         }
-      } catch (err) {
-        this.showNotice('Upload failed', 'error')
       }
-      return false
+      const busy = this.uploads.some(u => u.status === 'queued' || u.status === 'uploading')
+      if (!busy && this.uploads.length && !this._uploadBatchSettled) {
+        this._uploadBatchSettled = true
+        this.finishUploadBatch()
+      }
+    },
+
+    startUpload(id) {
+      const u = this.uploads.find(x => x.id === id)
+      const file = uploadFilesById.get(id)
+      if (!u || !file) return
+      this._uploadBatchSettled = false
+      u.status = 'uploading'
+      u.progress = 0
+
+      const xhr = new XMLHttpRequest()
+      uploadXhrById.set(id, xhr)
+      const form = new FormData()
+      form.append('files', file)
+      xhr.open('POST', `/api/albums/${u.albumId}/upload`)
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) u.progress = e.loaded / e.total
+      }
+      const settle = (ok) => {
+        uploadXhrById.delete(id)
+        if (u.status === 'canceled') { this.processUploads(); return }
+        u.status = ok ? 'done' : 'error'
+        if (ok) { u.progress = 1; uploadFilesById.delete(id) }
+        this.processUploads()
+      }
+      xhr.onload = () => settle(xhr.status >= 200 && xhr.status < 300)
+      xhr.onerror = () => settle(false)
+      xhr.onabort = () => settle(false)
+      xhr.send(form)
+    },
+
+    async finishUploadBatch() {
+      const done = this.uploads.filter(u => u.status === 'done').length
+      const failed = this.uploads.filter(u => u.status === 'error').length
+      const albumIds = new Set(this.uploads.filter(u => u.status === 'done').map(u => u.albumId))
+      if (this.activeAlbum && albumIds.has(this.activeAlbum.id)) await this.fetchMedia(this.activeAlbum.id)
+      await Promise.all([this.fetchAlbums(), this.fetchVaultStats()])
+      if (failed) this.showNotice(`${done} uploaded, ${failed} failed`, 'error')
+      else if (done) this.showNotice(`Uploaded ${done} ${done === 1 ? 'file' : 'files'}`, 'success')
+    },
+
+    retryUpload(id) {
+      const u = this.uploads.find(x => x.id === id)
+      if (u && u.status === 'error' && uploadFilesById.has(id)) {
+        u.status = 'queued'
+        u.progress = 0
+        this.processUploads()
+      }
+    },
+
+    retryFailedUploads() {
+      this.uploads.filter(u => u.status === 'error').forEach(u => this.retryUpload(u.id))
+    },
+
+    cancelUpload(id) {
+      const u = this.uploads.find(x => x.id === id)
+      if (!u) return
+      if (u.status === 'uploading') {
+        u.status = 'canceled'
+        uploadXhrById.get(id)?.abort()
+      }
+      uploadFilesById.delete(id)
+      this.uploads = this.uploads.filter(x => x.id !== id)
+      this.processUploads()
+    },
+
+    cancelAllUploads() {
+      for (const xhr of uploadXhrById.values()) { try { xhr.abort() } catch { /* ignore */ } }
+      uploadXhrById.clear()
+      uploadFilesById.clear()
+      this.uploads = []
+      this._uploadBatchSettled = false
+    },
+
+    dismissUploads() {
+      this.uploads = this.uploads.filter(u => u.status === 'queued' || u.status === 'uploading')
+    },
+
+    // ---- Delete with undo: items vanish at once and are only purged server-side after 30s ----
+    async trashMedia(ids) {
+      if (!ids.length) return false
+      const removed = this.currentMedia.filter(m => ids.includes(m.id))
+      try {
+        const res = await fetch('/api/media/trash', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mediaIds: ids })
+        })
+        if (!res.ok) throw new Error('trash failed')
+      } catch (err) {
+        this.showNotice('Delete failed', 'error')
+        return false
+      }
+      this.currentMedia = this.currentMedia.filter(m => !ids.includes(m.id))
+      this.selectedMediaIds = this.selectedMediaIds.filter(id => !ids.includes(id))
+      this.fetchAlbums()
+      this.fetchVaultStats()
+      const n = removed.length || ids.length
+      this.showNotice(`${n} ${n === 1 ? 'item' : 'items'} deleted`, 'info', {
+        label: 'Undo',
+        run: () => this.restoreMedia(ids)
+      })
+      return true
+    },
+
+    async restoreMedia(ids) {
+      try {
+        await fetch('/api/media/restore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mediaIds: ids })
+        })
+        if (this.activeAlbum) await this.fetchMedia(this.activeAlbum.id)
+        this.fetchAlbums()
+        this.fetchVaultStats()
+        this.showNotice('Restored', 'success')
+      } catch (err) {
+        this.showNotice('Could not restore items', 'error')
+      }
+    },
+
+    async toggleFavorite(ids, value) {
+      const set = new Set(ids)
+      this.currentMedia.forEach(m => { if (set.has(m.id)) m.favorite = value })
+      try {
+        await fetch('/api/media/favorite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mediaIds: ids, value })
+        })
+      } catch (err) {
+        this.currentMedia.forEach(m => { if (set.has(m.id)) m.favorite = !value })
+        this.showNotice('Could not update favourite', 'error')
+      }
     },
 
     async setAlbumCover(albumId, mediaId) {
@@ -339,13 +589,13 @@ export const useVaultStore = defineStore('vault', {
     selectRange(fromIndex, toIndex) {
       const start = Math.min(fromIndex, toIndex)
       const end = Math.max(fromIndex, toIndex)
-      const idsToAdd = this.currentMedia.slice(start, end + 1).map(m => m.id)
+      const idsToAdd = this.displayMedia.slice(start, end + 1).map(m => m.id)
       const set = new Set([...this.selectedMediaIds, ...idsToAdd])
       this.selectedMediaIds = Array.from(set)
     },
 
     selectAll() {
-      this.selectedMediaIds = this.currentMedia.map(m => m.id)
+      this.selectedMediaIds = this.displayMedia.map(m => m.id)
     },
 
     clearSelection() {
@@ -400,24 +650,7 @@ export const useVaultStore = defineStore('vault', {
     },
 
     async batchDelete() {
-      if (!this.selectedMediaIds.length) return
-      try {
-        const res = await fetch('/api/media/batch-delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mediaIds: this.selectedMediaIds })
-        })
-        if (res.ok) {
-          await this.fetchMedia(this.activeAlbum.id)
-          await this.fetchAlbums()
-          this.showNotice(`Deleted ${this.selectedMediaIds.length} items`, 'info')
-          this.clearSelection()
-          return true
-        }
-      } catch (err) {
-        this.showNotice('Batch delete failed', 'error')
-      }
-      return false
+      return this.trashMedia([...this.selectedMediaIds])
     },
 
     async batchDownload() {
@@ -448,38 +681,50 @@ export const useVaultStore = defineStore('vault', {
     // Viewer actions
     openViewer(index) {
       this.viewerActiveIndex = index
+      if (!this.viewerOpen) this.pushNav('viewer')
       this.viewerOpen = true
       this.slideshowPlaying = false
     },
 
     startSlideshow() {
-      if (!this.currentMedia.length) return
+      if (!this.displayMedia.length) return
       // If skip videos is on and current item is video, find first image
-      if (this.skipVideosInSlideshow && this.currentMedia[this.viewerActiveIndex]?.isVideo) {
-        const firstImgIndex = this.currentMedia.findIndex(m => !m.isVideo)
+      if (this.skipVideosInSlideshow && this.displayMedia[this.viewerActiveIndex]?.isVideo) {
+        const firstImgIndex = this.displayMedia.findIndex(m => !m.isVideo)
         if (firstImgIndex !== -1) {
           this.viewerActiveIndex = firstImgIndex
         }
       }
+      if (!this.viewerOpen) this.pushNav('viewer')
       this.viewerOpen = true
       this.slideshowPlaying = true
     },
 
     nextMedia() {
-      if (!this.currentMedia.length) return
+      if (!this.displayMedia.length) return
       let nextIndex = this.viewerActiveIndex + 1
 
+      if (this.slideshowPlaying && this.slideshowShuffle && this.displayMedia.length > 1) {
+        const pool = this.displayMedia
+          .map((m, i) => ({ m, i }))
+          .filter(({ m, i }) => i !== this.viewerActiveIndex && !(this.skipVideosInSlideshow && m.isVideo))
+        if (pool.length) {
+          this.viewerActiveIndex = pool[Math.floor(Math.random() * pool.length)].i
+          return
+        }
+      }
+
       if (this.slideshowPlaying && this.skipVideosInSlideshow) {
-        while (nextIndex < this.currentMedia.length && this.currentMedia[nextIndex].isVideo) {
+        while (nextIndex < this.displayMedia.length && this.displayMedia[nextIndex].isVideo) {
           nextIndex++
         }
-        if (nextIndex >= this.currentMedia.length) {
+        if (nextIndex >= this.displayMedia.length) {
           // Loop back to first image
-          nextIndex = this.currentMedia.findIndex(m => !m.isVideo)
+          nextIndex = this.displayMedia.findIndex(m => !m.isVideo)
           if (nextIndex === -1) nextIndex = 0
         }
       } else {
-        if (nextIndex >= this.currentMedia.length) {
+        if (nextIndex >= this.displayMedia.length) {
           nextIndex = 0
         }
       }
@@ -487,17 +732,17 @@ export const useVaultStore = defineStore('vault', {
     },
 
     prevMedia() {
-      if (!this.currentMedia.length) return
+      if (!this.displayMedia.length) return
       let prevIndex = this.viewerActiveIndex - 1
 
       if (this.slideshowPlaying && this.skipVideosInSlideshow) {
-        while (prevIndex >= 0 && this.currentMedia[prevIndex].isVideo) {
+        while (prevIndex >= 0 && this.displayMedia[prevIndex].isVideo) {
           prevIndex--
         }
         if (prevIndex < 0) {
           // Loop to last image
-          for (let i = this.currentMedia.length - 1; i >= 0; i--) {
-            if (!this.currentMedia[i].isVideo) {
+          for (let i = this.displayMedia.length - 1; i >= 0; i--) {
+            if (!this.displayMedia[i].isVideo) {
               prevIndex = i
               break
             }
@@ -506,17 +751,57 @@ export const useVaultStore = defineStore('vault', {
         }
       } else {
         if (prevIndex < 0) {
-          prevIndex = this.currentMedia.length - 1
+          prevIndex = this.displayMedia.length - 1
         }
       }
       this.viewerActiveIndex = prevIndex
     },
 
     closeViewer() {
+      if (!this.viewerOpen) return
+      // Pop our history entry; handlePopState finishes the close
+      if (history.state?.ax === 'viewer') history.back()
+      else this.finishCloseViewer()
+    },
+
+    finishCloseViewer() {
       this.viewerOpen = false
       this.slideshowPlaying = false
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {})
+      }
+    },
+
+    async fetchAuditLogs() {
+      this.loadingLogs = true
+      try {
+        const res = await fetch('/api/admin/logs')
+        if (res.ok) {
+          const data = await res.json()
+          this.auditLogs = data.logs || []
+          this.lastLoginTime = data.lastLogin || null
+          this.previousLoginTime = data.previousLogin || null
+          this.currentClientIp = data.currentIp || ''
+          this.totalLogins = data.totalLogins || 0
+          this.failedAttempts = data.failedAttempts || 0
+        }
+      } catch (err) {
+        console.error('Failed to fetch audit logs', err)
+      } finally {
+        this.loadingLogs = false
+      }
+    },
+
+    async clearAuditLogs() {
+      try {
+        const res = await fetch('/api/admin/logs/clear', { method: 'POST' })
+        if (res.ok) {
+          this.auditLogs = []
+          this.failedAttempts = 0
+          this.showNotice('Access logs cleared', 'success')
+        }
+      } catch (err) {
+        this.showNotice('Failed to clear logs', 'error')
       }
     }
   }

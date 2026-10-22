@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: process.env.PROJECT_NAME || 'apex-dispatch',
+      name: process.env.PROJECT_NAME || 'apex-auto',
       script: 'server/index.js',
       instances: 1,
       autorestart: true,

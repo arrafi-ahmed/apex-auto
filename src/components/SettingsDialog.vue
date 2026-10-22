@@ -1,124 +1,63 @@
 <template>
   <v-dialog v-model="store.settingsModalOpen" max-width="500">
-    <v-card class="glass-panel pa-4 rounded-xl text-white">
-      <v-card-title class="font-weight-bold d-flex align-center justify-space-between">
-        <div class="d-flex align-center gap-2">
-          <v-icon icon="mdi-tune" color="primary"></v-icon>
-          <span>Preferences</span>
+    <form class="ax-modal" @submit.prevent="saveSettings">
+      <div class="ax-modal-head">
+        <div>
+          <h2 class="ax-modal-title">Preferences</h2>
+          <p class="ax-modal-sub">Playback and access controls</p>
         </div>
-        <v-btn icon="mdi-close" variant="text" size="small" @click="store.settingsModalOpen = false"></v-btn>
-      </v-card-title>
+        <button type="button" class="ax-icon-btn" @click="store.settingsModalOpen = false"><v-icon icon="mdi-close" size="18"></v-icon></button>
+      </div>
 
-      <v-card-text>
-        <v-tabs v-model="activeTab" color="primary" density="compact" class="mb-4">
-          <v-tab value="slideshow">Slideshow</v-tab>
-          <v-tab value="security">Security</v-tab>
-        </v-tabs>
+      <div class="ax-tabs" role="tablist">
+        <button type="button" :class="{ 'is-active': activeTab === 'slideshow' }" @click="activeTab = 'slideshow'">Slideshow</button>
+        <button type="button" :class="{ 'is-active': activeTab === 'security' }" @click="activeTab = 'security'">Security</button>
+      </div>
 
-        <v-window v-model="activeTab">
-          <!-- Slideshow Config Tab -->
-          <v-window-item value="slideshow">
-            <div class="mb-4">
-              <label class="text-caption font-weight-bold mb-1 d-block">Slide Interval: {{ form.slideshowInterval }}s</label>
-              <v-slider
-                v-model="form.slideshowInterval"
-                :min="1"
-                :max="30"
-                :step="1"
-                thumb-label
-                color="primary"
-                track-color="rgba(255,255,255,0.1)"
-              ></v-slider>
-            </div>
+      <div v-show="activeTab === 'slideshow'" class="pane">
+        <div>
+          <div class="row"><label class="ax-label mb-0" for="interval">Slide duration</label><span class="val font-mono tabular">{{ form.slideshowInterval }}s</span></div>
+          <input id="interval" v-model.number="form.slideshowInterval" class="ax-range" :style="{ '--p': `${((form.slideshowInterval - 1) / 29) * 100}%` }" type="range" min="1" max="30" step="1" />
+        </div>
+        <label class="ax-switch">
+          <span><b>Skip videos</b><small>Slideshow rotates through photos only.</small></span>
+          <input v-model="form.skipVideosInSlideshow" type="checkbox" /><span class="track"></span>
+        </label>
+      </div>
 
-            <v-switch
-              v-model="form.skipVideosInSlideshow"
-              label="Skip videos during slideshow"
-              color="primary"
-              density="compact"
-              class="mb-2"
-            ></v-switch>
+      <div v-show="activeTab === 'security'" class="pane">
+        <div>
+          <label class="ax-label" for="trigger">Gateway keyword</label>
+          <div class="reveal">
+            <input id="trigger" v-model="form.secretTriggerWord" class="ax-input" :type="showTriggerWord ? 'text' : 'password'" autocomplete="off" placeholder="••••••••" />
+            <button type="button" class="ax-icon-btn" :title="showTriggerWord ? 'Hide' : 'Show'" @click="showTriggerWord = !showTriggerWord">
+              <v-icon :icon="showTriggerWord ? 'mdi-eye-off-outline' : 'mdi-eye-outline'" size="17"></v-icon>
+            </button>
+          </div>
+          <p class="ax-hint">The word on the public page that opens sign-in.</p>
+        </div>
+        <div>
+          <label class="ax-label" for="autolock">Auto-lock after</label>
+          <select id="autolock" v-model.number="form.autoLockMinutes" class="ax-input">
+            <option v-for="m in lockOptions" :key="m" :value="m">{{ m }} {{ m === 1 ? 'minute' : 'minutes' }}</option>
+          </select>
+          <p class="ax-hint">Returns to the public page when idle.</p>
+        </div>
+        <label class="ax-switch">
+          <span><b>Lock on tab switch</b><small>Lock if this tab stays hidden for more than 45 seconds.</small></span>
+          <input v-model="form.tabSwitchLock" type="checkbox" /><span class="track"></span>
+        </label>
+        <div>
+          <label class="ax-label" for="newpass">New passphrase</label>
+          <input id="newpass" v-model="form.newPassword" class="ax-input" type="password" autocomplete="new-password" placeholder="Leave blank to keep current" />
+        </div>
+      </div>
 
-            <p class="text-caption text-medium-emphasis">
-              When enabled, slideshow only rotates through images. When disabled, the slideshow plays each video to completion before advancing.
-            </p>
-          </v-window-item>
-
-          <!-- Security Tab -->
-          <v-window-item value="security">
-            <div class="mb-4">
-              <label class="text-caption font-weight-bold mb-1 d-block">Gateway Keyword</label>
-              <v-text-field
-                v-model="form.secretTriggerWord"
-                :type="showTriggerWord ? 'text' : 'password'"
-                placeholder="••••••••"
-                variant="outlined"
-                density="comfortable"
-                hint="Discreet gateway activation keyword"
-                persistent-hint
-                color="primary"
-                :append-inner-icon="showTriggerWord ? 'mdi-eye-off' : 'mdi-eye'"
-                @click:append-inner="showTriggerWord = !showTriggerWord"
-              ></v-text-field>
-            </div>
-
-            <div class="mb-4">
-              <label class="text-caption font-weight-bold mb-1 d-block">Inactivity Timeout</label>
-              <v-select
-                v-model="form.autoLockMinutes"
-                :items="[
-                  { title: '1 minute', value: 1 },
-                  { title: '3 minutes', value: 3 },
-                  { title: '5 minutes', value: 5 },
-                  { title: '10 minutes', value: 10 },
-                  { title: '15 minutes', value: 15 },
-                  { title: '30 minutes', value: 30 }
-                ]"
-                item-title="title"
-                item-value="value"
-                variant="outlined"
-                density="comfortable"
-                color="primary"
-                hint="Automatically returns to home page when idle"
-                persistent-hint
-              ></v-select>
-            </div>
-
-            <v-switch
-              v-model="form.tabSwitchLock"
-              label="Lock when browser tab is switched away (> 45s)"
-              color="primary"
-              density="compact"
-              class="mb-3"
-            ></v-switch>
-
-            <div class="mb-4">
-              <label class="text-caption font-weight-bold mb-1 d-block">Change Passphrase</label>
-              <v-text-field
-                v-model="form.newPassword"
-                type="password"
-                placeholder="Leave blank to keep current"
-                variant="outlined"
-                density="comfortable"
-                color="primary"
-              ></v-text-field>
-            </div>
-
-            <div class="pa-3 bg-surface-variant rounded-lg text-caption text-medium-emphasis">
-              <strong>Emergency Recovery:</strong> Server-side administrator unlock parameter enabled.
-            </div>
-          </v-window-item>
-        </v-window>
-      </v-card-text>
-
-      <v-card-actions class="pt-2">
-        <v-spacer></v-spacer>
-        <v-btn variant="text" @click="store.settingsModalOpen = false">Cancel</v-btn>
-        <v-btn color="primary" variant="flat" :loading="saving" @click="saveSettings">
-          Save Settings
-        </v-btn>
-      </v-card-actions>
-    </v-card>
+      <div class="ax-modal-actions">
+        <button type="button" class="ax-btn is-ghost" @click="store.settingsModalOpen = false">Cancel</button>
+        <button type="submit" class="ax-btn is-primary" :disabled="saving">{{ saving ? 'Saving…' : 'Save changes' }}</button>
+      </div>
+    </form>
   </v-dialog>
 </template>
 
@@ -130,6 +69,7 @@ const store = useVaultStore()
 const activeTab = ref('slideshow')
 const saving = ref(false)
 const showTriggerWord = ref(false)
+const lockOptions = [1, 3, 5, 10, 15, 30]
 
 const form = ref({
   slideshowInterval: 3,
@@ -184,3 +124,10 @@ async function saveSettings() {
   }
 }
 </script>
+
+<style scoped>
+.pane { display: flex; flex-direction: column; gap: 20px; }
+.row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.val { font-size: 12.5px; color: var(--ax-accent); }
+.reveal { display: flex; align-items: center; gap: 6px; }
+</style>

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Remote server deployment script for apex-dispatch.
+# Remote server deployment script for apex-auto.
 # Runs as root on the target server.
 set -Eeuo pipefail
 umask 027
 
-ENV_FILE="${1:-/root/deploy-apex-dispatch/app.env}"
+ENV_FILE="${1:-/root/deploy-apex-auto/app.env}"
 [[ -f "$ENV_FILE" ]] || { echo "Missing env file: $ENV_FILE" >&2; exit 1; }
 
 set -a
@@ -25,8 +25,14 @@ log "1. Synchronizing codebase into $SITE_DIR"
 # If Git repo is provided and .git exists, pull branch. Otherwise clone or use synced files.
 if [[ -n "${GIT_REPO:-}" ]]; then
   if [[ ! -d "$SITE_DIR/.git" ]]; then
-    log "Cloning repository $GIT_REPO..."
-    sudo -u "$SITE_USER" git clone "$GIT_REPO" "$SITE_DIR"
+    # The directory already holds data/uploads (made by the bootstrap), so a plain `git clone`
+    # would refuse; initialise in place and check the branch out instead.
+    log "First deploy: fetching $GIT_REPO (${GIT_BRANCH:-main}) into $SITE_DIR..."
+    cd "$SITE_DIR"
+    sudo -u "$SITE_USER" git init -q -b "${GIT_BRANCH:-main}"
+    sudo -u "$SITE_USER" git remote add origin "$GIT_REPO"
+    sudo -u "$SITE_USER" git fetch origin "${GIT_BRANCH:-main}" -q
+    sudo -u "$SITE_USER" git reset --hard "origin/${GIT_BRANCH:-main}" -q
   else
     log "Fetching latest commit from ${GIT_BRANCH:-main}..."
     cd "$SITE_DIR"
@@ -49,6 +55,11 @@ AUTO_LOCK_MINUTES=${AUTO_LOCK_MINUTES:-5}
 SLIDESHOW_INTERVAL=${SLIDESHOW_INTERVAL:-3}
 NODE_ENV=production
 ENV_EOF
+
+# Optional news settings: only written when set in the deploy profile (server defaults apply otherwise)
+for var in NEWS_REFRESH_HOURS NEWS_FEEDS NEWS_BING NEWS_BING_QUERIES NEWS_SOURCE_ALLOW NEWSDATA_API_KEY; do
+  if [[ -n "${!var:-}" ]]; then printf '%s=%s\n' "$var" "${!var}" >> "$SITE_DIR/.env"; fi
+done
 chmod 600 "$SITE_DIR/.env"
 chown "$SITE_USER":"$SITE_USER" "$SITE_DIR/.env"
 ok "Production .env file configured"

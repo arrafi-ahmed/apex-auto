@@ -1,13 +1,13 @@
-# Apex Auto Logistics & Dispatch (`apex-dispatch`)
+# Apex Auto News (`apex-auto`)
 
-A stealth private media gallery disguised as an **Auto Transport & Vehicle Logistics** commercial portal.
+A stealth private media gallery disguised as an **automotive news site** (budget cars in Indonesia, driving tips).
 
 ---
 
 ## 🔒 Stealth & Security Architecture
 
 1. **Decoy Car Transport Landing Page**:
-   - Commercial front for "Apex Auto Logistics" with quote estimator, freight service specs, and shipper reviews.
+   - Public front "Apex Auto News": a daily-refreshed archive of budget-car and driving-tip stories with search, topic filters and pagination.
    - Title, favicon, and SEO meta tags look 100% authentic.
 
 2. **Hidden Gateway**:
@@ -51,7 +51,7 @@ A stealth private media gallery disguised as an **Auto Transport & Vehicle Logis
 
 ## ⚙️ Configuration & PIN Setup
 
-Configured via `/home/raf/apps/apex-dispatch/.env` (and can also be edited live from inside the app Settings):
+Configured via `<project-dir>/.env` (and can also be edited live from inside the app Settings):
 
 ```dotenv
 # Master Security PIN or Passphrase

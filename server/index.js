@@ -5,19 +5,50 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
+import net from 'net'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
 import { fileURLToPath } from 'url'
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 const { ZipArchive } = require('archiver')
 import sharp from 'sharp'
-import { loadDB, saveDB, UPLOADS_DIR, THUMBS_DIR } from './db.js'
+import { loadDB, saveDB, hashSecret, verifySecret, UPLOADS_DIR, THUMBS_DIR } from './db.js'
 import { seedInitialData } from './seed.js'
+import { startNewsScheduler, listNews, valuePicks, getNewsItem, newsImageFile } from './news.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+// Auto-load root .env file if present
+const rootEnvPath = path.join(__dirname, '..', '.env')
+if (fs.existsSync(rootEnvPath)) {
+  try {
+    const envLines = fs.readFileSync(rootEnvPath, 'utf-8').split('\n')
+    for (const rawLine of envLines) {
+      const line = rawLine.trim()
+      if (line && !line.startsWith('#') && line.includes('=')) {
+        const eqIdx = line.indexOf('=')
+        const k = line.slice(0, eqIdx).trim()
+        const v = line.slice(eqIdx + 1).trim().replace(/^['"](.*)['"]$/, '$1')
+        if (k && !process.env[k]) {
+          process.env[k] = v
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[ENV] Note: Could not read root .env file:', err.message)
+  }
+}
+
 const app = express()
 const PORT = process.env.PORT || 3000
+
+// Reverse-proxy trust: only the local Nginx hop is trusted. Trusting private ranges
+// (uniquelocal/linklocal) lets any LAN/VPC host forge X-Forwarded-For. Override with
+// TRUST_PROXY (e.g. "2" if another trusted hop such as a CDN sits in front of Nginx).
+const TRUST_PROXY = process.env.TRUST_PROXY
+app.set('trust proxy', TRUST_PROXY === undefined ? 'loopback' : (/^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY))
 
 // Stealth Camouflage: Disable X-Powered-By header so Express is never leaked
 app.disable('x-powered-by')
@@ -48,6 +79,9 @@ setInterval(() => {
 
 // Seed demo data if database is fresh
 seedInitialData()
+
+// Daily car-news digest for the public landing page
+startNewsScheduler()
 
 app.use(cors({
   origin: true,
@@ -89,17 +123,24 @@ function sendCamouflage503(res) {
   return res.send(CAMOUFLAGE_503_HTML)
 }
 
-// Helper: Constant-time string comparison against side-channel timing attacks
-function safeCompare(inputStr, targetStr) {
-  if (typeof inputStr !== 'string' || typeof targetStr !== 'string') return false
-  const hashA = crypto.createHash('sha256').update(inputStr).digest()
-  const hashB = crypto.createHash('sha256').update(targetStr).digest()
-  return crypto.timingSafeEqual(hashA, hashB)
+// Helper: Get Client IP (uses Express trust proxy to prevent header spoofing)
+// The result is validated as a real IP literal so it is safe to use as a Map key,
+// in audit logs and in HTML, whatever the headers contained.
+function getClientIp(req) {
+  let ip = req.ip || req.socket.remoteAddress || ''
+  if (ip.startsWith('::ffff:')) ip = ip.slice(7)
+  return net.isIP(ip) ? ip : '0.0.0.0'
 }
 
-// Helper: Get Client IP
-function getClientIp(req) {
-  return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1'
+// Whitelist of settings that may ever leave the server. Never spread db.settings:
+// it also holds vaultPasswordHash and resetTokenHash.
+function publicSettings(s = {}) {
+  return {
+    slideshowInterval: s.slideshowInterval || 3,
+    skipVideosInSlideshow: s.skipVideosInSlideshow !== false,
+    secretTriggerWord: s.secretTriggerWord || 'guarantee',
+    autoLockMinutes: s.autoLockMinutes || 15
+  }
 }
 
 // Global Camouflage Lockout Middleware
@@ -109,7 +150,7 @@ app.use((req, res, next) => {
 
   // Check if admin emergency reset is requested
   const db = loadDB()
-  if (resetQueryToken && safeCompare(resetQueryToken, db.settings.resetToken)) {
+  if (resetQueryToken && verifySecret(resetQueryToken, db.settings.resetTokenHash)) {
     lockedClients.delete(clientIp)
     return res.status(200).send(`
       <html><body style="font-family:sans-serif;padding:40px;background:#0f172a;color:#38bdf8;">
@@ -184,9 +225,169 @@ function getSafeUploadPath(filename) {
 
 // Helper: Remove thumbnail for media ID
 function removeThumbnail(mediaId) {
-  const thumbPath = path.join(THUMBS_DIR, `${mediaId}-480.webp`)
-  if (fs.existsSync(thumbPath)) {
-    try { fs.unlinkSync(thumbPath) } catch (e) { /* ignore */ }
+  // -480 is the legacy square crop; -640 is the aspect-preserving thumbnail
+  for (const size of ['480', '640']) {
+    const thumbPath = path.join(THUMBS_DIR, `${mediaId}-${size}.webp`)
+    if (fs.existsSync(thumbPath)) {
+      try { fs.unlinkSync(thumbPath) } catch (e) { /* ignore */ }
+    }
+  }
+}
+
+// ---- Media probing & video posters (ffmpeg is optional) ----
+const execFileP = promisify(execFile)
+let ffmpegAvailable = null
+async function hasFfmpeg() {
+  if (ffmpegAvailable === null) {
+    try {
+      await execFileP('ffprobe', ['-version'], { timeout: 5000 })
+      await execFileP('ffmpeg', ['-version'], { timeout: 5000 })
+      ffmpegAvailable = true
+    } catch {
+      ffmpegAvailable = false
+    }
+  }
+  return ffmpegAvailable
+}
+
+// Returns { width, height, duration? } for a media record; {} when it cannot be determined.
+async function probeMedia(item) {
+  try {
+    const filePath = getSafeUploadPath(item.filename)
+    if (!item.isVideo) {
+      const meta = await sharp(filePath).metadata()
+      let { width, height } = meta
+      if (meta.orientation >= 5) [width, height] = [height, width]
+      return width && height ? { width, height } : {}
+    }
+    if (!(await hasFfmpeg())) return {}
+    const { stdout } = await execFileP('ffprobe', [
+      '-v', 'error', '-select_streams', 'v:0',
+      '-show_entries', 'stream=width,height:format=duration', '-of', 'json', filePath
+    ], { timeout: 15000 })
+    const info = JSON.parse(stdout)
+    const stream = info.streams?.[0] || {}
+    const duration = Number(info.format?.duration)
+    return {
+      ...(stream.width && stream.height ? { width: stream.width, height: stream.height } : {}),
+      ...(duration > 0 ? { duration } : {})
+    }
+  } catch {
+    return {}
+  }
+}
+
+// Extracts one frame from a video into a 640px WebP poster. Returns true on success.
+async function generateVideoPoster(rawFilePath, thumbPath) {
+  if (!(await hasFfmpeg())) return false
+  const tmpPng = `${thumbPath}.tmp.png`
+  for (const seek of ['1', '0']) {
+    try {
+      await execFileP('ffmpeg', ['-v', 'error', '-y', '-ss', seek, '-i', rawFilePath, '-frames:v', '1', tmpPng], { timeout: 30000 })
+      if (!fs.existsSync(tmpPng)) continue
+      await sharp(tmpPng).resize(640, 640, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }).toFile(thumbPath)
+      return true
+    } catch { /* try next seek position */ } finally {
+      try { fs.unlinkSync(tmpPng) } catch { /* ignore */ }
+    }
+  }
+  return false
+}
+
+// Soft-deleted media (undo window): hidden from every listing, purged for good after this delay.
+const TRASH_GRACE_MS = 30 * 1000
+const isLive = (m) => !m.trashedAt
+
+function purgeExpiredTrash() {
+  const db = loadDB()
+  const now = Date.now()
+  const expired = db.media.filter(m => m.trashedAt && now - new Date(m.trashedAt).getTime() > TRASH_GRACE_MS)
+  if (!expired.length) return
+  for (const m of expired) {
+    try {
+      const filePath = getSafeUploadPath(m.filename)
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    } catch { /* ignore */ }
+    removeThumbnail(m.id)
+  }
+  const ids = new Set(expired.map(m => m.id))
+  db.media = db.media.filter(m => !ids.has(m.id))
+  saveDB(db)
+}
+purgeExpiredTrash()
+setInterval(purgeExpiredTrash, 15 * 1000)
+
+// Helper: Parse User-Agent for device, platform, browser details
+function parseUserAgent(uaString = '') {
+  const ua = (uaString || '').trim()
+  if (!ua) {
+    return {
+      browser: 'Unknown Browser',
+      browserVersion: '',
+      os: 'Unknown OS',
+      deviceType: 'Unknown',
+      raw: ''
+    }
+  }
+
+  // OS & Device Type
+  let os = 'Unknown OS'
+  let deviceType = 'Desktop'
+
+  if (/iPhone/i.test(ua)) {
+    os = 'iOS (iPhone)'
+    deviceType = 'Mobile'
+  } else if (/iPad/i.test(ua)) {
+    os = 'iPadOS'
+    deviceType = 'Tablet'
+  } else if (/Android/i.test(ua)) {
+    deviceType = /Mobile/i.test(ua) ? 'Mobile' : 'Tablet'
+    const match = ua.match(/Android\s+([0-9.]+)/i)
+    os = match ? `Android ${match[1]}` : 'Android'
+  } else if (/Macintosh|Mac OS X/i.test(ua)) {
+    const match = ua.match(/Mac OS X\s+([0-9_]+)/i)
+    os = match ? `macOS ${match[1].replace(/_/g, '.')}` : 'macOS'
+  } else if (/Windows NT/i.test(ua)) {
+    const match = ua.match(/Windows NT\s+([0-9.]+)/i)
+    const ver = match ? match[1] : ''
+    const verMap = { '10.0': 'Windows 10/11', '6.3': 'Windows 8.1', '6.2': 'Windows 8', '6.1': 'Windows 7' }
+    os = verMap[ver] || `Windows ${ver}`
+  } else if (/CrOS/i.test(ua)) {
+    os = 'ChromeOS'
+  } else if (/Linux/i.test(ua)) {
+    os = 'Linux'
+  }
+
+  // Browser & Version
+  let browser = 'Unknown Browser'
+  let browserVersion = ''
+
+  if (/Edg(?:e|A|iOS)?\/([0-9.]+)/i.test(ua)) {
+    browser = 'Microsoft Edge'
+    browserVersion = RegExp.$1
+  } else if (/OPR\/([0-9.]+)/i.test(ua) || /Opera/i.test(ua)) {
+    browser = 'Opera'
+    browserVersion = RegExp.$1
+  } else if (/SamsungBrowser\/([0-9.]+)/i.test(ua)) {
+    browser = 'Samsung Internet'
+    browserVersion = RegExp.$1
+  } else if (/Chrome\/([0-9.]+)/i.test(ua)) {
+    browser = 'Chrome'
+    browserVersion = RegExp.$1
+  } else if (/Firefox\/([0-9.]+)/i.test(ua)) {
+    browser = 'Firefox'
+    browserVersion = RegExp.$1
+  } else if (/Version\/([0-9.]+).*Safari/i.test(ua)) {
+    browser = 'Safari'
+    browserVersion = RegExp.$1
+  }
+
+  return {
+    browser,
+    browserVersion: browserVersion ? browserVersion.split('.')[0] : '',
+    os,
+    deviceType,
+    raw: ua
   }
 }
 
@@ -204,13 +405,14 @@ app.get('/api/auth/status', (req, res) => {
   })
 })
 
-// Login endpoint with timing-safe comparison and lockout escalation
+// Login endpoint with timing-safe comparison, audit logging, and lockout escalation
 app.post('/api/auth/login', (req, res) => {
   const clientIp = getClientIp(req)
   const { password } = req.body
   const db = loadDB()
+  const uaInfo = parseUserAgent(req.headers['user-agent'])
 
-  if (password && safeCompare(password, db.settings.vaultPassword)) {
+  if (password && verifySecret(password, db.settings.vaultPasswordHash)) {
     // Reset any failed attempts on success
     lockedClients.delete(clientIp)
 
@@ -221,6 +423,26 @@ app.post('/api/auth/login', (req, res) => {
       ip: clientIp
     })
 
+    // Record successful login in audit log
+    const nowIso = new Date().toISOString()
+    const logEntry = {
+      id: 'log-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex'),
+      timestamp: nowIso,
+      ip: clientIp,
+      status: 'success',
+      os: uaInfo.os,
+      deviceType: uaInfo.deviceType,
+      browser: uaInfo.browser,
+      browserVersion: uaInfo.browserVersion,
+      userAgent: req.headers['user-agent'] || 'Unknown'
+    }
+
+    db.auditLogs = db.auditLogs || []
+    db.auditLogs.unshift(logEntry)
+    if (db.auditLogs.length > 500) db.auditLogs.pop()
+    db.lastLogin = nowIso
+    saveDB(db)
+
     res.cookie('vault_token', sessionToken, {
       httpOnly: true,
       sameSite: 'lax'
@@ -230,20 +452,34 @@ app.post('/api/auth/login', (req, res) => {
     return res.json({
       success: true,
       token: sessionToken,
-      settings: {
-        slideshowInterval: db.settings.slideshowInterval || 3,
-        skipVideosInSlideshow: db.settings.skipVideosInSlideshow !== false,
-        autoLockMinutes: db.settings.autoLockMinutes || 5
-      }
+      lastLogin: nowIso,
+      settings: publicSettings(db.settings)
     })
   } else {
-    // WRONG PASSWORD -> ENGAGE CAMOUFLAGE LOCKOUT
+    // WRONG PASSWORD -> ENGAGE CAMOUFLAGE LOCKOUT & RECORD AUDIT LOG
     console.warn(`[SECURITY] Intruder / Wrong password attempt from IP: ${clientIp}. Engaging camouflage mode.`)
     const current = lockedClients.get(clientIp) || { failedAttempts: 0, lockedUntil: null, permanent: true }
     current.failedAttempts += 1
     current.lockedUntil = Date.now() + LOCKOUT_DURATION_MS
     current.permanent = true // Hard lockout until reset or 30 min expiration
     lockedClients.set(clientIp, current)
+
+    // Record failed attempt in audit log
+    const logEntry = {
+      id: 'log-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex'),
+      timestamp: new Date().toISOString(),
+      ip: clientIp,
+      status: 'failed',
+      os: uaInfo.os,
+      deviceType: uaInfo.deviceType,
+      browser: uaInfo.browser,
+      browserVersion: uaInfo.browserVersion,
+      userAgent: req.headers['user-agent'] || 'Unknown'
+    }
+    db.auditLogs = db.auditLogs || []
+    db.auditLogs.unshift(logEntry)
+    if (db.auditLogs.length > 500) db.auditLogs.pop()
+    saveDB(db)
 
     return sendCamouflage503(res)
   }
@@ -255,6 +491,37 @@ app.post('/api/auth/logout', (req, res) => {
   if (token) activeSessions.delete(token)
   res.clearCookie('vault_token')
   res.status(200).send('OK')
+})
+
+// ================= AUDIT LOG ROUTES =================
+
+// Get audit log history & last login stats
+app.get('/api/admin/logs', requireAuth, (req, res) => {
+  const db = loadDB()
+  const clientIp = getClientIp(req)
+  const logs = db.auditLogs || []
+
+  // Extract successful logins
+  const successLogins = logs.filter(l => l.status === 'success')
+  const lastLogin = successLogins.length > 0 ? successLogins[0].timestamp : (db.lastLogin || null)
+  const previousLogin = successLogins.length > 1 ? successLogins[1].timestamp : lastLogin
+
+  res.json({
+    currentIp: clientIp,
+    lastLogin,
+    previousLogin,
+    totalLogins: successLogins.length,
+    failedAttempts: logs.filter(l => l.status === 'failed').length,
+    logs
+  })
+})
+
+// Clear audit logs
+app.post('/api/admin/logs/clear', requireAuth, (req, res) => {
+  const db = loadDB()
+  db.auditLogs = []
+  saveDB(db)
+  res.json({ success: true, message: 'Audit logs cleared' })
 })
 
 function formatBytes(bytes) {
@@ -270,7 +537,7 @@ function formatBytes(bytes) {
 app.get('/api/albums', requireAuth, (req, res) => {
   const db = loadDB()
   const albumsWithStats = db.albums.map(album => {
-    const albumMedia = db.media.filter(m => m.albumId === album.id)
+    const albumMedia = db.media.filter(m => m.albumId === album.id && isLive(m))
     const coverMedia = albumMedia.find(m => m.id === album.coverId) || albumMedia[0] || null
     const totalBytes = albumMedia.reduce((acc, m) => acc + (m.size || 0), 0)
     return {
@@ -288,12 +555,13 @@ app.get('/api/albums', requireAuth, (req, res) => {
 
 app.get('/api/vault/stats', requireAuth, (req, res) => {
   const db = loadDB()
-  const totalBytes = db.media.reduce((acc, m) => acc + (m.size || 0), 0)
+  const live = db.media.filter(isLive)
+  const totalBytes = live.reduce((acc, m) => acc + (m.size || 0), 0)
   res.json({
     totalAlbums: db.albums.length,
-    totalMedia: db.media.length,
-    totalImages: db.media.filter(m => !m.isVideo).length,
-    totalVideos: db.media.filter(m => m.isVideo).length,
+    totalMedia: live.length,
+    totalImages: live.filter(m => !m.isVideo).length,
+    totalVideos: live.filter(m => m.isVideo).length,
     totalBytes,
     totalSizeFormatted: formatBytes(totalBytes)
   })
@@ -374,22 +642,31 @@ app.delete('/api/albums/:id', requireAuth, (req, res) => {
 
 // ================= MEDIA ROUTES =================
 
-app.get('/api/albums/:albumId/media', requireAuth, (req, res) => {
+app.get('/api/albums/:albumId/media', requireAuth, async (req, res) => {
   const { albumId } = req.params
-  const db = loadDB()
-  const items = db.media.filter(m => m.albumId === albumId)
+  const items = loadDB().media.filter(m => m.albumId === albumId && isLive(m))
+
+  // Backfill dimensions/duration for items uploaded before probing existed. Probing is
+  // async, so results are applied to a freshly loaded DB to avoid clobbering other writes.
+  const pending = items.filter(m => !m.probed).slice(0, 60)
+  if (pending.length) {
+    const results = new Map(await Promise.all(pending.map(async m => [m.id, await probeMedia(m)])))
+    const db = loadDB()
+    for (const m of db.media) {
+      if (results.has(m.id)) Object.assign(m, results.get(m.id), { probed: true })
+    }
+    saveDB(db)
+    return res.json(db.media.filter(m => m.albumId === albumId && isLive(m)))
+  }
   res.json(items)
 })
 
-app.post('/api/albums/:albumId/upload', requireAuth, upload.array('files', 50), (req, res) => {
+app.post('/api/albums/:albumId/upload', requireAuth, upload.array('files', 50), async (req, res) => {
   const { albumId } = req.params
-  const db = loadDB()
-  const album = db.albums.find(a => a.id === albumId)
-  if (!album) return res.status(404).json({ error: 'Album not found' })
+  if (!loadDB().albums.some(a => a.id === albumId)) return res.status(404).json({ error: 'Album not found' })
 
   const uploadedMedia = []
   for (const file of req.files) {
-    const isVideo = file.mimetype.startsWith('video/')
     const item = {
       id: `media-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       albumId,
@@ -397,14 +674,18 @@ app.post('/api/albums/:albumId/upload', requireAuth, upload.array('files', 50), 
       originalName: file.originalname,
       mimeType: file.mimetype,
       size: file.size,
-      isVideo,
+      isVideo: file.mimetype.startsWith('video/'),
       title: path.parse(file.originalname).name,
       createdAt: new Date().toISOString()
     }
-    db.media.unshift(item)
+    Object.assign(item, await probeMedia(item), { probed: true })
     uploadedMedia.push(item)
   }
 
+  const db = loadDB()
+  const album = db.albums.find(a => a.id === albumId)
+  if (!album) return res.status(404).json({ error: 'Album not found' })
+  db.media.unshift(...uploadedMedia)
   if (!album.coverId && uploadedMedia.length > 0) {
     album.coverId = uploadedMedia[0].id
   }
@@ -412,6 +693,43 @@ app.post('/api/albums/:albumId/upload', requireAuth, upload.array('files', 50), 
   saveDB(db)
 
   res.json({ success: true, count: uploadedMedia.length, media: uploadedMedia })
+})
+
+// Soft delete with undo: items are hidden immediately and purged after TRASH_GRACE_MS
+app.post('/api/media/trash', requireAuth, (req, res) => {
+  const { mediaIds } = req.body
+  if (!Array.isArray(mediaIds)) return res.status(400).json({ error: 'Invalid parameters' })
+  const db = loadDB()
+  const now = new Date().toISOString()
+  let count = 0
+  for (const m of db.media) {
+    if (mediaIds.includes(m.id) && isLive(m)) { m.trashedAt = now; count++ }
+  }
+  saveDB(db)
+  res.json({ success: true, count })
+})
+
+app.post('/api/media/restore', requireAuth, (req, res) => {
+  const { mediaIds } = req.body
+  if (!Array.isArray(mediaIds)) return res.status(400).json({ error: 'Invalid parameters' })
+  const db = loadDB()
+  let count = 0
+  for (const m of db.media) {
+    if (mediaIds.includes(m.id) && m.trashedAt) { delete m.trashedAt; count++ }
+  }
+  saveDB(db)
+  res.json({ success: true, count })
+})
+
+app.post('/api/media/favorite', requireAuth, (req, res) => {
+  const { mediaIds, value } = req.body
+  if (!Array.isArray(mediaIds)) return res.status(400).json({ error: 'Invalid parameters' })
+  const db = loadDB()
+  for (const m of db.media) {
+    if (mediaIds.includes(m.id)) m.favorite = Boolean(value)
+  }
+  saveDB(db)
+  res.json({ success: true })
 })
 
 // Batch Move
@@ -426,7 +744,7 @@ app.post('/api/media/batch-move', requireAuth, (req, res) => {
 
   let movedCount = 0
   db.media.forEach(m => {
-    if (mediaIds.includes(m.id)) {
+    if (mediaIds.includes(m.id) && isLive(m)) {
       m.albumId = targetAlbumId
       movedCount++
     }
@@ -448,7 +766,7 @@ app.post('/api/media/batch-copy', requireAuth, (req, res) => {
 
   const copiedItems = []
   db.media.forEach(m => {
-    if (mediaIds.includes(m.id)) {
+    if (mediaIds.includes(m.id) && isLive(m)) {
       try {
         const srcPath = getSafeUploadPath(m.filename)
         const ext = path.extname(m.filename)
@@ -536,30 +854,15 @@ app.post('/api/media/batch-download', requireAuth, (req, res) => {
   archive.finalize()
 })
 
-// High-Performance On-The-Fly WebP Thumbnail Route (480x480 cached)
+// On-the-fly WebP thumbnails (640px, aspect ratio preserved, cached on disk).
+// Videos get a real poster frame when ffmpeg is installed, otherwise a generic SVG.
+const thumbJobs = new Map()
+
 app.get('/thumb/:id', requireAuth, async (req, res) => {
   const { id } = req.params
   const db = loadDB()
   const item = db.media.find(m => m.id === id)
   if (!item) return res.status(404).send('Not Found')
-
-  // Return clean SVG poster for video files
-  if (item.isVideo) {
-    res.setHeader('Content-Type', 'image/svg+xml')
-    res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
-    return res.send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 480" width="480" height="480">
-      <defs>
-        <linearGradient id="vbg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#0f172a"/>
-          <stop offset="100%" stop-color="#1e1b4b"/>
-        </linearGradient>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#vbg)"/>
-      <circle cx="240" cy="240" r="56" fill="#6366f1" fill-opacity="0.2"/>
-      <circle cx="240" cy="240" r="44" fill="#4f46e5" fill-opacity="0.4"/>
-      <polygon points="230,215 264,240 230,265" fill="#a5b4fc"/>
-    </svg>`)
-  }
 
   let rawFilePath
   try {
@@ -567,38 +870,46 @@ app.get('/thumb/:id', requireAuth, async (req, res) => {
   } catch (err) {
     return res.status(400).send('Invalid path')
   }
-
   if (!fs.existsSync(rawFilePath)) return res.status(404).send('Raw file missing')
 
-  const thumbFilename = `${item.id}-480.webp`
-  const thumbPath = path.join(THUMBS_DIR, thumbFilename)
-
-  res.setHeader('Content-Type', 'image/webp')
-  res.setHeader('Cache-Control', 'private, max-age=604800, immutable')
-
-  // Stream cached thumbnail if already generated
-  if (fs.existsSync(thumbPath)) {
+  const thumbPath = path.join(THUMBS_DIR, `${item.id}-640.webp`)
+  const sendThumb = () => {
+    res.setHeader('Content-Type', 'image/webp')
+    res.setHeader('Cache-Control', 'private, max-age=604800, immutable')
     return fs.createReadStream(thumbPath).pipe(res)
   }
+  if (fs.existsSync(thumbPath)) return sendThumb()
 
-  // Generate 480x480 WebP thumbnail using sharp
   try {
-    await sharp(rawFilePath)
-      .rotate() // auto-orient by EXIF
-      .resize(480, 480, {
-        fit: 'cover',
-        position: 'centre'
-      })
-      .webp({ quality: 82, effort: 4 })
-      .toFile(thumbPath)
-
-    return fs.createReadStream(thumbPath).pipe(res)
+    if (!thumbJobs.has(item.id)) {
+      const job = (async () => {
+        if (item.isVideo) return generateVideoPoster(rawFilePath, thumbPath)
+        await sharp(rawFilePath)
+          .rotate() // auto-orient by EXIF
+          .resize(640, 640, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 82, effort: 4 })
+          .toFile(thumbPath)
+        return true
+      })().finally(() => thumbJobs.delete(item.id))
+      thumbJobs.set(item.id, job)
+    }
+    if (await thumbJobs.get(item.id)) return sendThumb()
   } catch (err) {
     console.error(`Thumbnail generation error for ${item.filename}:`, err.message)
-    // Fallback to streaming raw file if sharp encountered an unexpected format
-    res.setHeader('Content-Type', item.mimeType || 'image/jpeg')
-    return fs.createReadStream(rawFilePath).pipe(res)
   }
+
+  if (item.isVideo) {
+    res.setHeader('Content-Type', 'image/svg+xml')
+    res.setHeader('Cache-Control', 'private, max-age=300')
+    return res.send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+      <rect width="100%" height="100%" fill="#18181b"/>
+      <circle cx="320" cy="180" r="44" fill="#6d7bff" fill-opacity="0.22"/>
+      <polygon points="306,158 342,180 306,202" fill="#a5b4fc"/>
+    </svg>`)
+  }
+  // Fallback to the raw file if sharp could not decode it
+  res.setHeader('Content-Type', item.mimeType || 'image/jpeg')
+  return fs.createReadStream(rawFilePath).pipe(res)
 })
 
 // Secure Streaming Route with Range Request Support (Full-Size Original)
@@ -652,12 +963,7 @@ app.get('/media-stream/:id', requireAuth, (req, res) => {
 
 app.get('/api/settings', requireAuth, (req, res) => {
   const db = loadDB()
-  res.json({
-    slideshowInterval: db.settings.slideshowInterval || 3,
-    skipVideosInSlideshow: db.settings.skipVideosInSlideshow !== false,
-    secretTriggerWord: db.settings.secretTriggerWord || 'guarantee',
-    autoLockMinutes: db.settings.autoLockMinutes || 15
-  })
+  res.json(publicSettings(db.settings))
 })
 
 app.post('/api/settings', requireAuth, (req, res) => {
@@ -666,14 +972,41 @@ app.post('/api/settings', requireAuth, (req, res) => {
 
   if (slideshowInterval !== undefined) db.settings.slideshowInterval = Number(slideshowInterval)
   if (skipVideosInSlideshow !== undefined) db.settings.skipVideosInSlideshow = Boolean(skipVideosInSlideshow)
-  if (secretTriggerWord) db.settings.secretTriggerWord = secretTriggerWord.trim()
+  if (typeof secretTriggerWord === 'string' && secretTriggerWord.trim()) db.settings.secretTriggerWord = secretTriggerWord.trim()
   if (autoLockMinutes !== undefined) db.settings.autoLockMinutes = Number(autoLockMinutes)
-  if (newPassword && newPassword.length >= 4) {
-    db.settings.vaultPassword = newPassword
+  if (typeof newPassword === 'string' && newPassword.length >= 4) {
+    db.settings.vaultPasswordHash = hashSecret(newPassword)
   }
 
   saveDB(db)
-  res.json({ success: true, settings: db.settings })
+  res.json({ success: true, settings: publicSettings(db.settings) })
+})
+
+// ================= PUBLIC NEWS (landing page) =================
+
+app.get('/api/news', (req, res) => {
+  const { page, pageSize, topic, model, q } = req.query
+  res.setHeader('Cache-Control', 'no-cache')
+  res.json(listNews({ page, pageSize, topic, model, q }))
+})
+
+app.get('/api/news/picks', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache')
+  res.json({ items: valuePicks(4) })
+})
+
+app.get('/api/news/:id', (req, res) => {
+  const item = getNewsItem(req.params.id)
+  if (!item) return res.status(404).json({ error: 'Not Found' })
+  res.setHeader('Cache-Control', 'public, max-age=300')
+  res.json(item)
+})
+
+app.get('/news-img/:file', (req, res) => {
+  const file = newsImageFile(req.params.file)
+  if (!file) return res.status(404).send('Not Found')
+  res.setHeader('Cache-Control', 'public, max-age=86400')
+  res.sendFile(file)
 })
 
 // In production, serve the built Vite app
@@ -685,6 +1018,9 @@ if (fs.existsSync(DIST_PATH)) {
   })
 }
 
-app.listen(PORT, '0.0.0.0', () => {
+// Bind to loopback by default so the app is only reachable through Nginx; port 3000
+// exposed directly would let clients send arbitrary forwarded headers.
+const HOST = process.env.HOST || '127.0.0.1'
+app.listen(PORT, HOST, () => {
   console.log(`[VAULT SERVER] Running on port ${PORT}`)
 })

@@ -1,65 +1,35 @@
 <template>
-  <v-dialog
-    v-model="store.authModalOpen"
-    max-width="380"
-    persistent
-    transition="dialog-transition"
-  >
-    <v-card class="glass-panel text-white rounded-2xl pa-4" elevation="24">
-      <div class="d-flex align-center gap-3 mb-4">
-        <v-avatar color="primary" variant="tonal" size="38" rounded="lg">
-          <v-icon icon="mdi-shield-check-outline" size="20"></v-icon>
-        </v-avatar>
+  <v-dialog v-model="store.authModalOpen" max-width="380" persistent>
+    <div class="ax-modal portal" role="dialog" aria-label="Client portal sign in">
+      <div class="ax-modal-head">
         <div>
-          <div class="text-subtitle-1 font-weight-bold">Client Portal</div>
-          <div class="text-caption text-medium-emphasis">Sign in to manage logistics</div>
+          <h2 class="ax-modal-title">Client portal</h2>
+          <p class="ax-modal-sub">Enter your passphrase to continue.</p>
         </div>
+        <button type="button" class="ax-icon-btn" aria-label="Close" :disabled="loading" @click="store.authModalOpen = false">
+          <v-icon icon="mdi-close" size="18"></v-icon>
+        </button>
       </div>
-
-      <v-card-text class="pa-0">
-        <form @submit.prevent="handleUnlock">
-          <v-text-field
+      <form @submit.prevent="handleUnlock">
+        <label class="ax-label" for="portal-pass">Passphrase</label>
+        <div class="reveal">
+          <input
+            id="portal-pass"
             v-model="password"
+            class="ax-input"
             :type="showPassword ? 'text' : 'password'"
-            label="Password"
-            placeholder="••••••••"
-            variant="outlined"
-            density="comfortable"
-            color="primary"
+            autocomplete="current-password"
             autofocus
-            :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-            @click:append-inner="showPassword = !showPassword"
-            class="mb-4"
-            :loading="loading"
             :disabled="loading"
-          ></v-text-field>
-
-          <div class="d-flex justify-end gap-2">
-            <v-btn
-              variant="text"
-              color="grey-lighten-1"
-              @click="store.authModalOpen = false"
-              :disabled="loading"
-              class="text-none"
-              size="small"
-            >
-              Cancel
-            </v-btn>
-            <v-btn
-              type="submit"
-              color="primary"
-              variant="flat"
-              :loading="loading"
-              class="text-none px-5 font-weight-bold"
-              size="small"
-              rounded="lg"
-            >
-              Sign In
-            </v-btn>
-          </div>
-        </form>
-      </v-card-text>
-    </v-card>
+          />
+          <button type="button" class="ax-icon-btn" :title="showPassword ? 'Hide' : 'Show'" @click="showPassword = !showPassword">
+            <v-icon :icon="showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'" size="17"></v-icon>
+          </button>
+        </div>
+        <button type="submit" class="ax-btn is-primary submit" :disabled="loading || !password">{{ loading ? 'Signing in…' : 'Sign in' }}</button>
+        <button type="button" class="ax-btn is-ghost submit" :disabled="loading" @click="store.authModalOpen = false">Cancel</button>
+      </form>
+    </div>
   </v-dialog>
 </template>
 
@@ -88,7 +58,7 @@ async function handleUnlock() {
 </script>
 
 <style scoped>
-.font-mono {
-  font-family: var(--font-mono) !important;
-}
+.reveal { display: flex; align-items: center; gap: 6px; }
+.submit { width: 100%; height: 38px; margin-top: 12px; }
+.submit + .submit { margin-top: 4px; }
 </style>

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local deploy driver for apex-dispatch.
+# Local deploy driver for apex-auto.
 # Usage:
 #   ./deploy/deploy-local.sh <profile> [--skip-git] [--bootstrap] [--no-deploy]
 set -Eeuo pipefail
@@ -43,6 +43,12 @@ required=(SERVER_IP DOMAIN SITE_USER PORT PROJECT_NAME)
 for var in "${required[@]}"; do
   [[ -n "${!var:-}" ]] || { echo "Error: $var is missing in $PROFILE_ENV" >&2; exit 1; }
 done
+
+if [[ "$SITE_USER" =~ ^[0-9] ]]; then
+  echo "✘ Error: SITE_USER '$SITE_USER' is invalid. Linux/CloudPanel usernames cannot start with a number (0-9)." >&2
+  echo "Please change SITE_USER to start with a letter (e.g., 'fourstate' or 'apexweb') in: $PROFILE_ENV" >&2
+  exit 1
+fi
 
 SSH_TARGET="root@$SERVER_IP"
 

@@ -1,165 +1,62 @@
 <template>
   <div>
-    <!-- Floating Action Bar -->
-    <v-fade-transition>
-      <div v-if="store.selectedCount > 0" class="floating-batch-bar d-flex align-center gap-3">
-        <v-chip color="primary" variant="flat" size="small" class="font-weight-medium">
-          {{ store.selectedCount }} selected
-        </v-chip>
-
-          <!-- Remove noisy divider; gap in flex provides visual separation -->
-          <v-divider vertical class="mx-1 my-3 opacity-10"></v-divider>
-
-        <v-btn
-          size="small"
-          variant="tonal"
-          color="white"
-          prepend-icon="mdi-folder-move-outline"
-          class="text-none font-weight-medium"
-          @click="showMoveModal = true"
-        >
-          Move
-        </v-btn>
-
-        <v-btn
-          size="small"
-          variant="tonal"
-          color="white"
-          prepend-icon="mdi-content-copy"
-          class="text-none font-weight-medium"
-          @click="showCopyModal = true"
-        >
-          Copy
-        </v-btn>
-
-        <v-btn
-          size="small"
-          variant="tonal"
-          color="success"
-          prepend-icon="mdi-download"
-          class="text-none font-weight-medium"
-          @click="store.batchDownload"
-        >
-          Download
-        </v-btn>
-
-        <v-btn
-          size="small"
-          variant="tonal"
-          color="error"
-          prepend-icon="mdi-delete-outline"
-          class="text-none font-weight-medium"
-          @click="showDeleteModal = true"
-        >
-          Delete
-        </v-btn>
-
-        <v-btn
-          size="small"
-          icon="mdi-close"
-          variant="text"
-          color="grey-lighten-1"
-          class="ml-1"
-          @click="store.clearSelection"
-          title="Clear Selection"
-        ></v-btn>
+    <transition name="dock">
+      <div v-if="store.selectedCount > 0" class="dock" role="toolbar" aria-label="Selection actions">
+        <span class="dock-count"><b class="tabular">{{ store.selectedCount }}</b> selected</span>
+        <span class="dock-sep"></span>
+        <button class="dock-btn" @click="showMoveModal = true"><v-icon icon="mdi-folder-move-outline"></v-icon>Move</button>
+        <button class="dock-btn" @click="showCopyModal = true"><v-icon icon="mdi-content-copy"></v-icon>Copy</button>
+        <button class="dock-btn" @click="store.batchDownload"><v-icon icon="mdi-download-outline"></v-icon>Download</button>
+        <button class="dock-btn is-danger" @click="store.batchDelete"><v-icon icon="mdi-delete-outline"></v-icon>Delete</button>
+        <span class="dock-sep"></span>
+        <button class="ax-icon-btn" title="Clear selection" @click="store.clearSelection"><v-icon icon="mdi-close" size="17"></v-icon></button>
       </div>
-    </v-fade-transition>
+    </transition>
 
-    <!-- Batch Move Dialog -->
+    <!-- Move -->
     <v-dialog v-model="showMoveModal" max-width="440">
-      <v-card class="glass-panel pa-4 rounded-xl">
-        <v-card-title class="font-weight-bold d-flex align-center gap-2">
-          <v-icon icon="mdi-folder-move-outline" color="primary"></v-icon>
-          Move {{ store.selectedCount }} items to Album
-        </v-card-title>
-        <v-card-text>
-          <p class="text-caption text-medium-emphasis mb-3">
-            Select the destination album where the selected media will be relocated:
-          </p>
-          <v-select
-            v-model="targetAlbumId"
-            :items="availableAlbums"
-            item-title="title"
-            item-value="id"
-            label="Destination Album"
-            variant="outlined"
-            density="comfortable"
-            color="primary"
-          ></v-select>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="showMoveModal = false">Cancel</v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            :disabled="!targetAlbumId"
-            @click="handleBatchMove"
-          >
-            Confirm Move
-          </v-btn>
-        </v-card-actions>
-      </v-card>
+      <form class="ax-modal" @submit.prevent="targetAlbumId && handleBatchMove()">
+        <div class="ax-modal-head">
+          <div>
+            <h2 class="ax-modal-title">Move {{ store.selectedCount }} {{ store.selectedCount === 1 ? 'item' : 'items' }}</h2>
+            <p class="ax-modal-sub">Choose the album they should live in.</p>
+          </div>
+          <button type="button" class="ax-icon-btn" @click="showMoveModal = false"><v-icon icon="mdi-close" size="18"></v-icon></button>
+        </div>
+        <label class="ax-label" for="move-target">Destination</label>
+        <select id="move-target" v-model="targetAlbumId" class="ax-input">
+          <option :value="null" disabled>Select album…</option>
+          <option v-for="a in availableAlbums" :key="a.id" :value="a.id">{{ a.title }}</option>
+        </select>
+        <div class="ax-modal-actions">
+          <button type="button" class="ax-btn is-ghost" @click="showMoveModal = false">Cancel</button>
+          <button type="submit" class="ax-btn is-primary" :disabled="!targetAlbumId">Move</button>
+        </div>
+      </form>
     </v-dialog>
 
-    <!-- Batch Copy Dialog -->
+    <!-- Copy -->
     <v-dialog v-model="showCopyModal" max-width="440">
-      <v-card class="glass-panel pa-4 rounded-xl">
-        <v-card-title class="font-weight-bold d-flex align-center gap-2">
-          <v-icon icon="mdi-content-copy" color="info"></v-icon>
-          Copy {{ store.selectedCount }} items to Album
-        </v-card-title>
-        <v-card-text>
-          <p class="text-caption text-medium-emphasis mb-3">
-            Select the album to duplicate the selected media into:
-          </p>
-          <v-select
-            v-model="targetAlbumId"
-            :items="availableAlbums"
-            item-title="title"
-            item-value="id"
-            label="Destination Album"
-            variant="outlined"
-            density="comfortable"
-            color="primary"
-          ></v-select>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="showCopyModal = false">Cancel</v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            :disabled="!targetAlbumId"
-            @click="handleBatchCopy"
-          >
-            Confirm Copy
-          </v-btn>
-        </v-card-actions>
-      </v-card>
+      <form class="ax-modal" @submit.prevent="targetAlbumId && handleBatchCopy()">
+        <div class="ax-modal-head">
+          <div>
+            <h2 class="ax-modal-title">Copy {{ store.selectedCount }} {{ store.selectedCount === 1 ? 'item' : 'items' }}</h2>
+            <p class="ax-modal-sub">Duplicates are added to the album you choose.</p>
+          </div>
+          <button type="button" class="ax-icon-btn" @click="showCopyModal = false"><v-icon icon="mdi-close" size="18"></v-icon></button>
+        </div>
+        <label class="ax-label" for="copy-target">Destination</label>
+        <select id="copy-target" v-model="targetAlbumId" class="ax-input">
+          <option :value="null" disabled>Select album…</option>
+          <option v-for="a in availableAlbums" :key="a.id" :value="a.id">{{ a.title }}</option>
+        </select>
+        <div class="ax-modal-actions">
+          <button type="button" class="ax-btn is-ghost" @click="showCopyModal = false">Cancel</button>
+          <button type="submit" class="ax-btn is-primary" :disabled="!targetAlbumId">Copy</button>
+        </div>
+      </form>
     </v-dialog>
 
-    <!-- Batch Delete Dialog -->
-    <v-dialog v-model="showDeleteModal" max-width="440">
-      <v-card class="glass-panel pa-4 rounded-xl border border-red">
-        <v-card-title class="font-weight-bold d-flex align-center gap-2 text-error">
-          <v-icon icon="mdi-alert-octagon-outline" color="error"></v-icon>
-          Confirm Permanent Deletion
-        </v-card-title>
-        <v-card-text>
-          Are you sure you want to permanently delete <strong>{{ store.selectedCount }} items</strong>?
-          This action will immediately wipe the files from the disk and cannot be undone.
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="showDeleteModal = false">Cancel</v-btn>
-          <v-btn color="error" variant="flat" @click="handleBatchDelete">
-            Delete Permanently
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
   </div>
 </template>
 
@@ -171,7 +68,6 @@ const store = useVaultStore()
 
 const showMoveModal = ref(false)
 const showCopyModal = ref(false)
-const showDeleteModal = ref(false)
 const targetAlbumId = ref(null)
 
 const availableAlbums = computed(() => {
@@ -193,8 +89,29 @@ async function handleBatchCopy() {
   targetAlbumId.value = null
 }
 
-async function handleBatchDelete() {
-  await store.batchDelete()
-  showDeleteModal.value = false
-}
 </script>
+
+<style scoped>
+.dock {
+  position: fixed; z-index: 999; left: 50%; bottom: 24px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4px; padding: 6px;
+  max-width: calc(100vw - 24px);
+  border-radius: 14px; background: rgba(var(--v-theme-surface-bright), 0.92);
+  backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--ax-line-strong); box-shadow: var(--ax-shadow-lg);
+}
+.dock-count { padding: 0 10px 0 8px; font-size: 13px; color: var(--ax-text-2); white-space: nowrap; }
+.dock-count b { color: var(--ax-text); font-weight: 600; }
+.dock-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--ax-line-strong); }
+.dock-btn {
+  display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 11px; border: 0; border-radius: 9px;
+  background: transparent; color: var(--ax-text); font: 500 13px/1 var(--font-sans); cursor: pointer;
+  transition: background-color var(--ax-fast);
+}
+.dock-btn .v-icon { font-size: 16px; color: var(--ax-text-2); }
+.dock-btn:hover { background: rgba(var(--v-theme-on-surface), 0.08); }
+.dock-btn.is-danger:hover, .dock-btn.is-danger:hover .v-icon { background: var(--ax-danger-soft); color: var(--ax-danger); }
+.dock-enter-active, .dock-leave-active { transition: opacity 0.22s var(--ax-ease), transform 0.22s var(--ax-ease); }
+.dock-enter-from, .dock-leave-to { opacity: 0; transform: translate(-50%, 12px); }
+@media (max-width: 560px) { .dock-btn { font-size: 0; gap: 0; padding: 0 9px; } .dock-btn .v-icon { font-size: 18px; } }
+</style>

@@ -1,264 +1,480 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=JetBrains+Mono:wght@400;500&display=swap');
 
+/* ==========================================================================
+   APEX DESIGN TOKENS
+   Colors come from the Vuetify theme (src/main.js) so CSS and components
+   always agree. Use these tokens in scoped styles instead of raw hex values.
+   ========================================================================== */
 :root {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Surfaces */
-  --bg-deep:     #080b12;
-  --bg-card:     #0d1117;
-  --bg-card-alt: #111827;
+  --ax-bg:            rgb(var(--v-theme-background));
+  --ax-surface:       rgb(var(--v-theme-surface));
+  --ax-surface-2:     rgb(var(--v-theme-surface-bright));
+  --ax-surface-3:     rgb(var(--v-theme-surface-light));
+  --ax-glass:         rgba(var(--v-theme-surface), 0.72);
 
-  /* Borders */
-  --border-subtle: rgba(255, 255, 255, 0.05);
-  --border-mid:    rgba(255, 255, 255, 0.09);
-  --border-focus:  rgba(59, 130, 246, 0.45);
+  /* Lines */
+  --ax-line:          rgba(var(--v-border-color), 0.08);
+  --ax-line-strong:   rgba(var(--v-border-color), 0.14);
 
   /* Text */
-  --text-primary:   #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted:     #475569;
+  --ax-text:          rgba(var(--v-theme-on-surface), 0.96);
+  --ax-text-2:        rgba(var(--v-theme-on-surface), 0.64);
+  --ax-text-3:        rgba(var(--v-theme-on-surface), 0.42);
 
   /* Accent */
-  --accent:        #3b82f6;
-  --accent-subtle: rgba(59, 130, 246, 0.12);
+  --ax-accent:        rgb(var(--v-theme-primary));
+  --ax-accent-soft:   rgba(var(--v-theme-primary), 0.14);
+  --ax-accent-ring:   rgba(var(--v-theme-primary), 0.35);
+  --ax-danger:        rgb(var(--v-theme-error));
+  --ax-danger-soft:   rgba(var(--v-theme-error), 0.12);
+
+  /* Shape & motion */
+  --ax-radius-sm: 8px;
+  --ax-radius:    12px;
+  --ax-radius-lg: 16px;
+  --ax-radius-xl: 20px;
+  --ax-shadow:    0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -8px rgba(0, 0, 0, 0.45);
+  --ax-shadow-lg: 0 24px 64px -16px rgba(0, 0, 0, 0.7);
+  --ax-ease:      cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ax-fast:      140ms;
+  --ax-med:       220ms;
+
+  /* Legacy aliases (kept so older scoped styles keep resolving) */
+  --bg-deep: var(--ax-bg);
+  --bg-card: var(--ax-surface);
+  --bg-card-alt: var(--ax-surface-2);
+  --border-subtle: var(--ax-line);
+  --border-mid: var(--ax-line-strong);
+  --text-primary: var(--ax-text);
+  --text-secondary: var(--ax-text-2);
+  --text-muted: var(--ax-text-3);
+  --accent: var(--ax-accent);
+  --accent-subtle: var(--ax-accent-soft);
+  --accent-glow: var(--ax-accent-ring);
 }
 
-/* ─── Reset ─── */
-* { box-sizing: border-box; }
+/* ─── Base ─── */
+*, *::before, *::after { box-sizing: border-box; }
 
-body {
+html, body {
   margin: 0;
   padding: 0;
   font-family: var(--font-sans);
-  background-color: var(--bg-deep);
-  color: var(--text-primary);
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  background-color: var(--ax-bg);
+  color: var(--ax-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.5;
+  text-rendering: optimizeLegibility;
 }
+
+.v-application {
+  font-family: var(--font-sans) !important;
+  background: var(--ax-bg) !important;
+}
+
+/* Vuetify typography classes use Roboto by default */
+.v-application [class*='text-h'],
+.v-application [class*='text-body'],
+.v-application [class*='text-subtitle'],
+.v-application [class*='text-caption'],
+.v-application .text-overline {
+  font-family: var(--font-sans) !important;
+  letter-spacing: -0.006em !important;
+}
+
+::selection { background: var(--ax-accent-soft); }
+
+:focus-visible {
+  outline: 2px solid var(--ax-accent-ring);
+  outline-offset: 2px;
+}
+
+.v-overlay__content:focus-visible, .v-overlay__content > *:focus-visible { outline: none; }
 
 /* ─── Scrollbars ─── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
+* { scrollbar-width: thin; scrollbar-color: var(--ax-line-strong) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.18); }
-
-/* ─── Glass surfaces ─── */
-/* Use only for overlays / navbars. Avoid on grid cards. */
-.glass-panel {
-  background: rgba(13, 17, 23, 0.78) !important;
-  backdrop-filter: blur(16px) saturate(160%);
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
-  border: 1px solid var(--border-subtle) !important;
+  background: var(--ax-line-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
-.glass-nav {
-  background: rgba(8, 11, 18, 0.90) !important;
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border-subtle) !important;
-}
+/* ==========================================================================
+   VUETIFY REFINEMENTS
+   Only what `defaults` in main.js can't express. Keep this list short.
+   ========================================================================== */
 
-/* Flat dark surface — prefer over glass for grid cards */
-.surface-card {
-  background: var(--bg-card) !important;
-  border: 1px solid var(--border-subtle) !important;
-}
-
-/* ─── Album tiles ─── */
-.minimal-album-card {
-  position: relative;
-  background: transparent !important;
-  border: none !important;
-  border-radius: 10px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.minimal-album-card:hover { transform: translateY(-2px); }
-
-.minimal-album-thumb {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  border-radius: 10px;
-  overflow: hidden;
-  background-color: var(--bg-card);
-  position: relative;
-  border: 1px solid var(--border-subtle);
-  transition: border-color 0.2s ease;
-}
-
-.minimal-album-card:hover .minimal-album-thumb {
-  border-color: var(--border-mid);
-}
-
-.minimal-album-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.4s ease;
-}
-
-.minimal-album-card:hover .minimal-album-img { transform: scale(1.03); }
-
-/* ─── Media grid tiles ─── */
-.minimal-media-tile {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: 8px;
-  overflow: hidden;
-  position: relative;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  cursor: pointer;
-  transition:
-    transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 0.18s ease;
-}
-
-.minimal-media-tile:hover {
-  transform: scale(1.012);
-  border-color: var(--border-mid);
-}
-
-.minimal-media-tile.is-selected {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 2px var(--accent) !important;
-}
-
-.minimal-media-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s ease;
-}
-
-.minimal-media-tile:hover .minimal-media-img { transform: scale(1.03); }
-
-/* ─── Checkbox overlay ─── */
-.minimal-check-overlay {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  z-index: 4;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  background: rgba(8, 11, 18, 0.7);
-  backdrop-filter: blur(6px);
-  border-radius: 6px;
-  padding: 2px;
-}
-
-.minimal-media-tile:hover .minimal-check-overlay,
-.minimal-media-tile.is-selected .minimal-check-overlay {
-  opacity: 1;
-}
-
-/* ─── Video indicator badge ─── */
-.video-indicator-badge {
-  position: absolute;
-  bottom: 6px;
-  right: 6px;
-  z-index: 5;
-  background: rgba(8, 11, 18, 0.65);
-  backdrop-filter: blur(4px);
-  color: rgba(255, 255, 255, 0.7);
-  padding: 2px 5px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* ─── Size badge ─── */
-.media-size-badge {
-  position: absolute;
-  bottom: 6px;
-  left: 6px;
-  font-size: 10px;
-  font-family: var(--font-mono);
-  background: rgba(8, 11, 18, 0.7);
-  backdrop-filter: blur(4px);
-  color: var(--text-secondary);
-  padding: 1px 5px;
-  border-radius: 4px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  pointer-events: none;
-}
-
-.minimal-media-tile:hover .media-size-badge { opacity: 1; }
-
-/* ─── Tile menu ─── */
-.tile-menu-overlay {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  z-index: 6;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.minimal-media-tile:hover .tile-menu-overlay { opacity: 1; }
-
-.tile-menu-btn {
-  background: rgba(8, 11, 18, 0.72) !important;
-  backdrop-filter: blur(4px);
-  border-radius: 6px;
-}
-
-/* ─── Floating batch bar ─── */
-.floating-batch-bar {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 999;
-  background: rgba(13, 17, 23, 0.94);
-  backdrop-filter: blur(24px) saturate(160%);
-  border: 1px solid var(--border-mid);
-  box-shadow:
-    0 16px 32px -8px rgba(0, 0, 0, 0.7),
-    0 0 0 1px rgba(255, 255, 255, 0.04);
-  border-radius: 9999px;
-  padding: 6px 16px;
-}
-
-/* ─── Viewer HUD ─── */
-/* NOTE: scoped component CSS handles the per-element transitions.
-   This global rule ensures the hidden state is always enforced. */
-.viewer-hud-hidden {
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-/* ─── Drag & drop overlay ─── */
-.drag-drop-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 99999;
-  background: rgba(8, 11, 18, 0.88);
+/* Overlays: soft blurred scrim */
+.v-overlay__scrim {
+  background: rgba(5, 5, 7, 0.72) !important;
+  opacity: 1 !important;
   backdrop-filter: blur(8px);
-  display: flex;
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Buttons: no uppercase, crisp weight, subtle press */
+.v-btn {
+  font-weight: 550;
+  transition: background-color var(--ax-fast) var(--ax-ease), transform var(--ax-fast) var(--ax-ease), opacity var(--ax-fast);
+}
+.v-btn:active { transform: scale(0.98); }
+.v-btn--variant-outlined { border-color: var(--ax-line-strong); }
+
+/* Fields: hairline border, accent ring on focus */
+.v-field--variant-solo-filled,
+.v-field--variant-filled {
+  box-shadow: inset 0 0 0 1px var(--ax-line) !important;
+  transition: box-shadow var(--ax-fast) var(--ax-ease);
+}
+.v-field--variant-solo-filled:hover { box-shadow: inset 0 0 0 1px var(--ax-line-strong) !important; }
+.v-field--focused.v-field--variant-solo-filled {
+  box-shadow: inset 0 0 0 1px var(--ax-accent), 0 0 0 3px var(--ax-accent-soft) !important;
+}
+.v-field__input { font-size: 14px; }
+
+/* Menus & lists */
+.v-menu > .v-overlay__content > .v-list,
+.v-menu > .v-overlay__content > .v-card {
+  border: 1px solid var(--ax-line-strong);
+  box-shadow: var(--ax-shadow-lg) !important;
+  padding: 4px;
+}
+.v-list-item-title { font-size: 13.5px; font-weight: 500; }
+
+/* Dialog cards */
+.v-dialog > .v-overlay__content > .v-card,
+.v-dialog > .v-overlay__content > .ax-dialog {
+  box-shadow: var(--ax-shadow-lg) !important;
+  border: 1px solid var(--ax-line-strong);
+}
+
+/* Snackbar */
+.v-snackbar__wrapper {
+  border: 1px solid var(--ax-line-strong);
+  box-shadow: var(--ax-shadow-lg) !important;
+  min-width: 0 !important;
+}
+
+/* Tables */
+.v-table { background: transparent !important; }
+.v-table > .v-table__wrapper > table > thead > tr > th {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ax-text-3) !important;
+}
+
+/* Tooltip */
+.v-tooltip > .v-overlay__content {
+  background: var(--ax-surface-3) !important;
+  color: var(--ax-text) !important;
+  border: 1px solid var(--ax-line-strong);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: var(--ax-radius-sm);
+}
+
+/* ==========================================================================
+   SHARED PRIMITIVES (ax-*)
+   ========================================================================== */
+
+/* Frosted bar / panel */
+.ax-glass {
+  background: var(--ax-glass);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--ax-line);
+}
+
+/* Plain surface card */
+.ax-surface {
+  background: var(--ax-surface);
+  border: 1px solid var(--ax-line);
+  border-radius: var(--ax-radius-lg);
+}
+
+/* Dialog shell used by custom (non v-card) dialogs */
+.ax-dialog {
+  background: var(--ax-surface);
+  border-radius: var(--ax-radius-xl);
+  color: var(--ax-text);
+  overflow: hidden;
+}
+
+/* Small uppercase label above headings */
+.ax-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ax-text-3);
+}
+
+/* Square icon button (non-Vuetify, for dense toolbars and tile overlays) */
+.ax-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--ax-radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ax-text-2);
+  cursor: pointer;
+  transition: background-color var(--ax-fast) var(--ax-ease), color var(--ax-fast), border-color var(--ax-fast);
+}
+.ax-icon-btn:hover { background: rgba(var(--v-theme-on-surface), 0.06); color: var(--ax-text); }
+.ax-icon-btn.is-danger:hover { background: var(--ax-danger-soft); color: var(--ax-danger); }
+.ax-icon-btn.is-active { background: var(--ax-accent-soft); color: var(--ax-accent); }
+
+/* Tiny stat/label pill */
+.ax-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ax-text-2);
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  border: 1px solid var(--ax-line);
+}
+
+/* ─── Buttons ─── */
+.ax-btn {
+  --btn-bg: var(--ax-surface-3);
+  --btn-bg-hover: rgba(var(--v-theme-on-surface), 0.14);
+  --btn-fg: var(--ax-text);
+  --btn-border: var(--ax-line-strong);
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--ax-radius-sm);
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font: 500 13px/1 var(--font-sans);
+  letter-spacing: -0.006em;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  text-decoration: none;
+  transition: background-color var(--ax-fast) var(--ax-ease), border-color var(--ax-fast), transform var(--ax-fast) var(--ax-ease), opacity var(--ax-fast);
 }
-
-.drag-drop-box {
-  border: 2px dashed rgba(59, 130, 246, 0.5);
-  max-width: 480px;
-  animation: subtlePulse 2s ease-in-out infinite alternate;
+.ax-btn:hover:not(:disabled) { background: var(--btn-bg-hover); }
+.ax-btn:active:not(:disabled) { transform: scale(0.97); }
+.ax-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ax-btn .v-icon { font-size: 16px; }
+.ax-btn.is-primary {
+  --btn-bg: var(--ax-accent);
+  --btn-bg-hover: rgb(var(--v-theme-primary-darken-1));
+  --btn-fg: #fff;
+  --btn-border: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 2px rgba(0, 0, 0, 0.4);
 }
-
-@keyframes subtlePulse {
-  from { border-color: rgba(59, 130, 246, 0.35); }
-  to   { border-color: rgba(59, 130, 246, 0.65); }
+.ax-btn.is-ghost { --btn-bg: transparent; --btn-border: transparent; --btn-fg: var(--ax-text-2); }
+.ax-btn.is-ghost:hover:not(:disabled) { --btn-fg: var(--ax-text); }
+.ax-btn.is-outline { --btn-bg: transparent; --btn-bg-hover: rgba(var(--v-theme-on-surface), 0.06); }
+.ax-btn.is-danger {
+  --btn-bg: var(--ax-danger);
+  --btn-bg-hover: rgb(var(--v-theme-error), 0.85);
+  --btn-fg: #fff;
+  --btn-border: transparent;
 }
+.ax-btn.is-sm { height: 30px; padding: 0 11px; font-size: 12.5px; }
 
-/* ─── Cursor utilities ─── */
+/* ─── Form controls ─── */
+.ax-label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 500; color: var(--ax-text-2); }
+.ax-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--ax-radius-sm);
+  border: 1px solid var(--ax-line-strong);
+  background: var(--ax-bg);
+  color: var(--ax-text);
+  font: 400 14px/1 var(--font-sans);
+  outline: none;
+  transition: border-color var(--ax-fast), box-shadow var(--ax-fast);
+}
+textarea.ax-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: vertical; min-height: 84px; }
+.ax-input::placeholder { color: var(--ax-text-3); }
+.ax-input:hover { border-color: rgba(var(--v-border-color), 0.22); }
+.ax-input:focus { border-color: var(--ax-accent); box-shadow: 0 0 0 3px var(--ax-accent-soft); }
+select.ax-input {
+  appearance: none;
+  padding-right: 32px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+}
+select.ax-input option { background: var(--ax-surface-2); color: var(--ax-text); }
+.ax-search { position: relative; }
+.ax-search .v-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 16px; color: var(--ax-text-3); pointer-events: none; }
+.ax-search .ax-input { padding-left: 34px; }
+
+/* ─── Segmented control ─── */
+.ax-seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--ax-surface);
+  border: 1px solid var(--ax-line);
+}
+.ax-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ax-text-2);
+  font: 500 12.5px/1 var(--font-sans);
+  cursor: pointer;
+  transition: background-color var(--ax-fast), color var(--ax-fast);
+}
+.ax-seg button .v-icon { font-size: 15px; }
+.ax-seg button:hover { color: var(--ax-text); }
+.ax-seg button.is-active { background: var(--ax-surface-3); color: var(--ax-text); box-shadow: 0 0 0 1px var(--ax-line-strong); }
+
+/* ─── Switch & range ─── */
+.ax-switch { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 16px; border-radius: var(--ax-radius); border: 1px solid var(--ax-line); background: var(--ax-bg); cursor: pointer; }
+.ax-switch b { display: block; font-size: 13.5px; font-weight: 500; }
+.ax-switch small { display: block; margin-top: 3px; font-size: 12.5px; line-height: 1.45; color: var(--ax-text-2); }
+.ax-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.ax-switch .track { flex: none; position: relative; width: 36px; height: 20px; margin-top: 1px; border-radius: 999px; background: var(--ax-surface-3); border: 1px solid var(--ax-line-strong); transition: background-color var(--ax-fast), border-color var(--ax-fast); }
+.ax-switch .track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #d4d4d8; transition: transform var(--ax-fast) var(--ax-ease), background-color var(--ax-fast); }
+.ax-switch input:checked + .track { background: var(--ax-accent); border-color: transparent; }
+.ax-switch input:checked + .track::after { transform: translateX(16px); background: #fff; }
+.ax-switch input:focus-visible + .track { outline: 2px solid var(--ax-accent-ring); outline-offset: 2px; }
+.ax-range { --p: 0%; width: 100%; height: 4px; appearance: none; border-radius: 999px; background: linear-gradient(to right, var(--ax-accent) var(--p), rgba(var(--v-theme-on-surface), 0.14) var(--p)); outline: none; cursor: pointer; }
+.ax-range::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 0 0 4px var(--ax-accent-soft), 0 1px 3px rgba(0,0,0,.5); }
+.ax-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 0; }
+.ax-hint { margin: 6px 0 0; font-size: 12px; color: var(--ax-text-3); }
+.ax-tabs { display: flex; gap: 20px; margin-bottom: 22px; border-bottom: 1px solid var(--ax-line); }
+.ax-tabs button { position: relative; padding: 0 0 12px; border: 0; background: none; color: var(--ax-text-2); font: 500 13.5px/1 var(--font-sans); cursor: pointer; }
+.ax-tabs button:hover { color: var(--ax-text); }
+.ax-tabs button.is-active { color: var(--ax-text); }
+.ax-tabs button.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--ax-accent); }
+
+/* ─── Menu (inside v-menu) ─── */
+.ax-menu {
+  min-width: 190px;
+  padding: 4px;
+  border-radius: var(--ax-radius);
+  background: var(--ax-surface-2);
+  border: 1px solid var(--ax-line-strong);
+  box-shadow: var(--ax-shadow-lg);
+}
+.ax-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ax-text);
+  font: 500 13px/1.2 var(--font-sans);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ax-menu-item .v-icon { font-size: 16px; color: var(--ax-text-2); }
+.ax-menu-item:hover { background: rgba(var(--v-theme-on-surface), 0.07); }
+.ax-menu-item.is-danger, .ax-menu-item.is-danger .v-icon { color: var(--ax-danger); }
+.ax-menu-item.is-danger:hover { background: var(--ax-danger-soft); }
+.ax-menu-sep { height: 1px; margin: 4px 6px; background: var(--ax-line); }
+
+/* ─── Chips ─── */
+.ax-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ax-text-2);
+  background: rgba(var(--v-theme-on-surface), 0.06);
+}
+.ax-chip.is-accent { color: var(--ax-accent); background: var(--ax-accent-soft); }
+.ax-chip.is-ok { color: rgb(var(--v-theme-success)); background: rgba(var(--v-theme-success), 0.12); }
+.ax-chip.is-bad { color: var(--ax-danger); background: var(--ax-danger-soft); }
+.ax-chip.is-warn { color: rgb(var(--v-theme-warning)); background: rgba(var(--v-theme-warning), 0.12); }
+
+/* ─── Data table ─── */
+.ax-table-wrap { overflow-x: auto; border: 1px solid var(--ax-line); border-radius: var(--ax-radius-lg); background: var(--ax-surface); }
+.ax-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ax-table th {
+  padding: 11px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ax-text-3);
+  border-bottom: 1px solid var(--ax-line);
+  white-space: nowrap;
+}
+.ax-table td { padding: 12px 16px; border-bottom: 1px solid var(--ax-line); color: var(--ax-text); vertical-align: middle; }
+.ax-table tr:last-child td { border-bottom: 0; }
+.ax-table tbody tr:hover td { background: rgba(var(--v-theme-on-surface), 0.025); }
+
+/* ─── Modal shell ─── */
+.ax-modal { width: 100%; padding: 24px; background: var(--ax-surface); border: 1px solid var(--ax-line-strong); border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-lg); color: var(--ax-text); }
+.ax-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.ax-modal-title { font-size: 16px; font-weight: 600; letter-spacing: -0.015em; margin: 0; }
+.ax-modal-sub { margin: 3px 0 0; font-size: 13px; color: var(--ax-text-2); }
+.ax-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+
+/* Hairline divider */
+.ax-hairline { height: 1px; background: var(--ax-line); border: 0; margin: 0; }
+
+/* Skeleton shimmer */
+.ax-skeleton {
+  background: linear-gradient(90deg, var(--ax-surface-2) 0%, var(--ax-surface-3) 50%, var(--ax-surface-2) 100%);
+  background-size: 200% 100%;
+  animation: ax-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes ax-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* Fade-up entrance */
+.ax-enter { animation: ax-fade-up var(--ax-med) var(--ax-ease) both; }
+@keyframes ax-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ─── Utilities ─── */
+/* `gap-*` aliases (Vuetify ships `ga-*`); 1 step = 4px */
+.gap-1 { gap: 4px !important; }  .gap-2 { gap: 8px !important; }  .gap-3 { gap: 12px !important; }
+.gap-4 { gap: 16px !important; } .gap-5 { gap: 20px !important; } .gap-6 { gap: 24px !important; }
+.gap-8 { gap: 32px !important; }
+
 .cursor-pointer { cursor: pointer; }
-.cursor-text    { cursor: text; }
+.font-mono { font-family: var(--font-mono) !important; }
+.text-2 { color: var(--ax-text-2) !important; }
+.text-3 { color: var(--ax-text-3) !important; }
+.tabular { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
