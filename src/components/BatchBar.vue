@@ -7,7 +7,8 @@
           {{ store.selectedCount }} selected
         </v-chip>
 
-        <v-divider vertical class="mx-1 my-2 opacity-20"></v-divider>
+          <!-- Remove noisy divider; gap in flex provides visual separation -->
+          <v-divider vertical class="mx-1 my-3 opacity-10"></v-divider>
 
         <v-btn
           size="small"
@@ -39,7 +40,7 @@
           class="text-none font-weight-medium"
           @click="store.batchDownload"
         >
-          Download (.zip)
+          Download
         </v-btn>
 
         <v-btn

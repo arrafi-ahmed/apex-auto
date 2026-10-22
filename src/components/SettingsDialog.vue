@@ -12,7 +12,7 @@
       <v-card-text>
         <v-tabs v-model="activeTab" color="primary" density="compact" class="mb-4">
           <v-tab value="slideshow">Slideshow</v-tab>
-          <v-tab value="security">Access &amp; Security</v-tab>
+          <v-tab value="security">Security</v-tab>
         </v-tabs>
 
         <v-window v-model="activeTab">

@@ -4,20 +4,17 @@
     @dragenter.prevent="isDragging = true"
     @dragover.prevent
   >
-    <!-- Top Vault App Bar -->
-    <!-- Top Minimal App Bar -->
-    <v-app-bar flat class="glass-nav px-4" height="60">
+    <!-- App Bar -->
+    <v-app-bar flat class="glass-nav px-4" height="58">
       <div class="d-flex align-center gap-3">
-        <v-icon icon="mdi-view-gallery-outline" size="22" color="primary"></v-icon>
-        <div>
-          <div class="text-subtitle-1 font-weight-bold">
-            <span v-if="!store.activeAlbum">Gallery</span>
-            <span v-else class="cursor-pointer" @click="store.activeAlbum = null">
-              <span class="text-medium-emphasis">Albums</span>
-              <span class="mx-2 text-disabled">/</span>
-              <span>{{ store.activeAlbum.title }}</span>
-            </span>
-          </div>
+        <v-icon icon="mdi-image-multiple-outline" size="20" color="grey-lighten-1"></v-icon>
+        <div class="text-body-2 font-weight-medium" style="letter-spacing: -0.01em;">
+          <span v-if="!store.activeAlbum">Gallery</span>
+          <span v-else class="cursor-pointer" @click="store.activeAlbum = null">
+            <span class="text-medium-emphasis">Gallery</span>
+            <span class="mx-1 text-disabled">/</span>
+            <span>{{ store.activeAlbum.title }}</span>
+          </span>
         </div>
       </div>
 
@@ -233,37 +230,28 @@
 
           <!-- SUB-VIEW B: DEDICATED ADMIN ALBUM MANAGER -->
           <div v-else class="album-manager-dashboard">
-            <!-- Overall Storage Metrics Cards -->
-            <v-row class="mb-6">
-              <v-col cols="6" sm="3">
-                <v-card class="glass-panel pa-4 rounded-xl text-center">
-                  <v-icon icon="mdi-database-outline" color="primary" size="26" class="mb-1"></v-icon>
-                  <div class="text-h6 font-weight-bold font-mono">{{ store.vaultStats?.totalSizeFormatted || '0 B' }}</div>
-                  <div class="text-caption text-medium-emphasis">Raw Disk Storage Used</div>
-                </v-card>
-              </v-col>
-              <v-col cols="6" sm="3">
-                <v-card class="glass-panel pa-4 rounded-xl text-center">
-                  <v-icon icon="mdi-folder-multiple-outline" color="blue" size="26" class="mb-1"></v-icon>
-                  <div class="text-h6 font-weight-bold font-mono">{{ store.albums.length }}</div>
-                  <div class="text-caption text-medium-emphasis">Managed Albums</div>
-                </v-card>
-              </v-col>
-              <v-col cols="6" sm="3">
-                <v-card class="glass-panel pa-4 rounded-xl text-center">
-                  <v-icon icon="mdi-image-multiple" color="teal" size="26" class="mb-1"></v-icon>
-                  <div class="text-h6 font-weight-bold font-mono">{{ store.vaultStats?.totalImages || 0 }}</div>
-                  <div class="text-caption text-medium-emphasis">Full-Size Photos</div>
-                </v-card>
-              </v-col>
-              <v-col cols="6" sm="3">
-                <v-card class="glass-panel pa-4 rounded-xl text-center">
-                  <v-icon icon="mdi-video" color="deep-purple-accent-2" size="26" class="mb-1"></v-icon>
-                  <div class="text-h6 font-weight-bold font-mono">{{ store.vaultStats?.totalVideos || 0 }}</div>
-                  <div class="text-caption text-medium-emphasis">Video Files</div>
-                </v-card>
-              </v-col>
-            </v-row>
+            <!-- Inline Storage Stats Row -->
+            <div class="d-flex align-center gap-5 mb-6 pa-4 surface-card rounded-xl text-caption text-medium-emphasis">
+              <div>
+                <span class="font-weight-medium text-white font-mono">{{ store.vaultStats?.totalSizeFormatted || '—' }}</span>
+                <span class="ml-1">storage</span>
+              </div>
+              <span class="text-disabled">·</span>
+              <div>
+                <span class="font-weight-medium text-white font-mono">{{ store.albums.length }}</span>
+                <span class="ml-1">albums</span>
+              </div>
+              <span class="text-disabled">·</span>
+              <div>
+                <span class="font-weight-medium text-white font-mono">{{ store.vaultStats?.totalImages || 0 }}</span>
+                <span class="ml-1">photos</span>
+              </div>
+              <span class="text-disabled">·</span>
+              <div>
+                <span class="font-weight-medium text-white font-mono">{{ store.vaultStats?.totalVideos || 0 }}</span>
+                <span class="ml-1">videos</span>
+              </div>
+            </div>
 
             <!-- Detailed Management Table of Albums -->
             <v-card class="glass-panel rounded-xl overflow-hidden pa-3" elevation="8">
@@ -410,17 +398,16 @@
           <!-- Empty Album State -->
           <div
             v-if="!store.currentMedia.length"
-            class="empty-album-dropzone glass-panel rounded-2xl pa-12 text-center my-8"
+            class="empty-album-dropzone surface-card rounded-xl pa-16 text-center my-6"
+            style="border: 2px dashed rgba(255,255,255,0.07);"
             @dragover.prevent
             @drop.prevent="handleDrop"
           >
-            <v-icon icon="mdi-cloud-upload-outline" size="72" color="primary" class="mb-4"></v-icon>
-            <h2 class="text-h5 font-weight-bold mb-2">No media files in this album yet</h2>
-            <p class="text-body-2 text-medium-emphasis mb-6">
-              Drag &amp; drop photos or videos anywhere here, or click below to browse.
-            </p>
-            <v-btn color="primary" variant="flat" size="large" prepend-icon="mdi-plus" @click="triggerFileInput">
-              Select Photos &amp; Videos
+            <v-icon icon="mdi-image-plus-outline" size="48" color="grey-darken-1" class="mb-5"></v-icon>
+            <h2 class="text-subtitle-1 font-weight-semibold mb-1">This album is empty</h2>
+            <p class="text-caption text-medium-emphasis mb-6">Drop photos or videos here, or click to browse.</p>
+            <v-btn color="primary" variant="flat" size="small" prepend-icon="mdi-plus" class="text-none" @click="triggerFileInput">
+              Add media
             </v-btn>
           </div>
 
@@ -502,7 +489,7 @@
                     loading="lazy"
                   />
                   <div v-else class="video-thumb-placeholder w-100 h-100 d-flex align-center justify-center">
-                    <v-icon icon="mdi-play-circle" size="44" color="deep-purple-accent-2"></v-icon>
+                    <v-icon icon="mdi-play-circle-outline" size="40" color="grey-darken-1"></v-icon>
                   </div>
 
                   <!-- Item Selection Checkbox (supports Shift+Click) -->
@@ -886,185 +873,21 @@ async function executeDeleteAlbum() {
   padding-top: 16px;
 }
 
-.album-card {
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+/* ─── Layout ─── */
+.private-gallery-root {
+  min-height: 100vh;
+  background-color: #080b12;
+  color: #f1f5f9;
 }
 
-.album-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(59, 130, 246, 0.4) !important;
-  box-shadow: 0 12px 30px -10px rgba(59, 130, 246, 0.2) !important;
+.gallery-main-content {
+  padding-top: 8px;
 }
 
-.album-cover-box {
-  width: 100%;
-  height: 180px;
-  background-color: #0c1222;
-  overflow: hidden;
-}
-
-.album-cover-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.album-cover-placeholder {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-}
-
-.album-count-badge {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-}
-
-.new-album-card {
-  border: 2px dashed rgba(255, 255, 255, 0.15) !important;
-  background: rgba(15, 23, 42, 0.3) !important;
-  min-height: 260px;
-  transition: all 0.2s ease;
-}
-
-.new-album-card:hover {
-  border-color: #3b82f6 !important;
-  background: rgba(59, 130, 246, 0.05) !important;
-}
-
-/* Media Grid Card */
-.media-grid-card {
-  border: 1px solid rgba(255, 255, 255, 0.06) !important;
-  transition: transform 0.15s ease, border-color 0.15s ease;
-  cursor: pointer;
-}
-
-.media-grid-card:hover {
-  transform: scale(1.02);
-  border-color: rgba(59, 130, 246, 0.4) !important;
-}
-
-.card-selected {
-  border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 2px #3b82f6 !important;
-}
-
-.media-thumb-container {
-  width: 100%;
-  height: 140px;
-  background-color: #090e1a;
-  position: relative;
-  overflow: hidden;
-}
-
-.media-thumb-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
+/* ─── Video thumb background ─── */
 .video-thumb-placeholder {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #1e1145 0%, #090e1a 100%);
-}
-
-.media-checkbox-overlay {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  z-index: 5;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
-  border-radius: 6px;
-  padding: 2px;
-}
-
-.media-type-badge {
-  position: absolute;
-  bottom: 6px;
-  right: 6px;
-  z-index: 5;
-}
-
-.empty-album-dropzone {
-  border: 2px dashed rgba(255, 255, 255, 0.15);
-}
-
-.tile-menu-overlay {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  z-index: 6;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.minimal-media-tile:hover .tile-menu-overlay {
-  opacity: 1;
-}
-
-.tile-menu-btn {
-  background: rgba(15, 23, 42, 0.7) !important;
-  backdrop-filter: blur(4px);
-  border-radius: 6px;
-}
-
-.media-size-badge {
-  position: absolute;
-  bottom: 6px;
-  left: 6px;
-  font-size: 10px;
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(4px);
-  color: #94a3b8;
-  padding: 1px 6px;
-  border-radius: 4px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.minimal-media-tile:hover .media-size-badge {
-  opacity: 1;
-}
-
-.drag-drop-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 99999;
-  background: rgba(3, 7, 18, 0.85);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: all;
-}
-
-.drag-drop-box {
-  border: 3px dashed #3b82f6;
-  max-width: 500px;
-  animation: pulseGlow 1.5s infinite alternate;
-}
-
-.video-indicator-badge {
-  position: absolute;
-  bottom: 6px;
-  right: 6px;
-  z-index: 5;
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(4px);
-  color: #ffffff;
-  padding: 2px 6px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-@keyframes pulseGlow {
-  from { box-shadow: 0 0 20px rgba(59, 130, 246, 0.2); }
-  to { box-shadow: 0 0 50px rgba(59, 130, 246, 0.5); }
+  background-color: #0d1117;
 }
 </style>

@@ -13,6 +13,7 @@
       v-if="store.slideshowPlaying && !isFullscreen"
       class="slideshow-progress-line"
       :style="{ width: `${progressPercent}%` }"
+      style="position: absolute; top: 0; left: 0; height: 2px; background: #3b82f6; z-index: 9999; transition: width 0.1s linear; pointer-events: none;"
     ></div>
 
     <!-- Top Navigation / Info Bar -->

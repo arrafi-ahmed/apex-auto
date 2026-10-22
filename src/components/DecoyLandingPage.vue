@@ -1,26 +1,24 @@
 <template>
   <div class="decoy-container">
-    <!-- Top Announcement Bar -->
-    <div class="announcement-bar d-flex justify-space-between align-center px-4 py-1 text-caption">
-      <div class="d-flex align-center gap-3">
-        <span><v-icon icon="mdi-shield-check" size="14" class="text-success mr-1"></v-icon>USDOT #3892014 &amp; MC-89210-B Certified Carrier</span>
-        <span class="d-none d-md-inline">•</span>
-        <span class="d-none d-md-inline"><v-icon icon="mdi-star" size="14" class="text-warning mr-1"></v-icon>Rated 4.9/5 by 3,400+ Vehicle Owners</span>
-      </div>
+    <!-- Thin announcement bar -->
+    <div class="announcement-bar d-flex justify-space-between align-center px-5 text-caption" style="height: 34px;">
       <div class="d-flex align-center gap-4">
-        <span><v-icon icon="mdi-phone" size="14" class="mr-1"></v-icon>24/7 Dispatch: <strong>1-800-555-APEX</strong></span>
+        <span><v-icon icon="mdi-shield-check" size="13" class="text-success mr-1"></v-icon>USDOT #3892014 · MC-89210-B Certified Carrier</span>
+      </div>
+      <div class="d-none d-md-flex align-center gap-4">
+        <span><v-icon icon="mdi-phone-outline" size="13" class="mr-1"></v-icon>24/7 Dispatch: <strong>1-800-555-APEX</strong></span>
       </div>
     </div>
 
     <!-- Main Navigation Bar -->
     <v-app-bar flat class="glass-nav px-4" height="74">
       <div class="d-flex align-center">
-        <v-avatar color="primary" rounded="lg" size="42" class="mr-3 elevation-2">
-          <v-icon icon="mdi-truck-cargo-container" size="26" color="white"></v-icon>
-        </v-avatar>
+        <div class="brand-mark mr-3">
+          <v-icon icon="mdi-truck-cargo-container" size="22" color="primary"></v-icon>
+        </div>
         <div>
-          <div class="text-h6 font-weight-black tracking-tight line-height-1">APEX AUTO</div>
-          <div class="text-caption text-medium-emphasis letter-spacing-wide">LOGISTICS &amp; TRANSPORT</div>
+          <div class="text-body-1 font-weight-semibold" style="letter-spacing: -0.02em; line-height: 1.1;">Apex Auto Logistics</div>
+          <div class="text-caption text-medium-emphasis" style="font-size: 10px; letter-spacing: 0.06em;">NATIONWIDE CARRIER</div>
         </div>
       </div>
 
@@ -62,13 +60,12 @@
     <section class="hero-section text-center position-relative overflow-hidden">
       <div class="hero-bg-glow"></div>
       <v-container class="py-16 position-relative" style="z-index: 2;">
-        <v-chip color="primary" variant="tonal" size="small" class="mb-4 font-weight-bold text-uppercase px-4">
-          <v-icon icon="mdi-shield-airplane" start size="16"></v-icon>
+        <div class="hero-eyebrow text-caption font-weight-medium mb-5" style="color: #60a5fa; letter-spacing: 0.06em; text-transform: uppercase;">
           Nationwide White-Glove Auto Relocation
-        </v-chip>
-        <h1 class="hero-title text-h3 text-md-h2 font-weight-black mb-4">
-          Safe, Insured &amp; Expedited <br />
-          <span class="text-gradient">Vehicle Transport Solutions</span>
+        </div>
+        <h1 class="hero-title text-h4 text-md-h2 font-weight-bold mb-4" style="letter-spacing: -0.03em; line-height: 1.1;">
+          Safe, Insured &amp; Expedited<br />
+          <span class="text-gradient">Vehicle Transport</span>
         </h1>
         <p class="hero-subtitle text-body-1 text-md-h6 text-medium-emphasis mx-auto mb-10" style="max-width: 680px;">
           From rare exotic supercars and classic restorations to daily drivers and commercial fleets. Guaranteed pickup windows with GPS telemetry tracking.
@@ -160,20 +157,15 @@
 
         <v-row>
           <v-col cols="12" md="4" v-for="service in services" :key="service.title">
-            <v-card class="service-card glass-panel pa-6 h-100 rounded-xl" elevation="6">
-              <v-avatar :color="service.color" variant="tonal" size="56" class="mb-4">
-                <v-icon :icon="service.icon" size="30"></v-icon>
-              </v-avatar>
-              <h3 class="text-h6 font-weight-bold mb-2">{{ service.title }}</h3>
-              <p class="text-body-2 text-medium-emphasis mb-4">{{ service.description }}</p>
-              <v-list density="compact" class="bg-transparent pa-0">
-                <v-list-item v-for="feat in service.features" :key="feat" class="pa-0 min-h-0 text-caption">
-                  <template #prepend>
-                    <v-icon icon="mdi-check" size="14" color="success" class="mr-2"></v-icon>
-                  </template>
-                  {{ feat }}
-                </v-list-item>
-              </v-list>
+            <v-card class="service-card glass-panel pa-6 h-100 rounded-xl" elevation="0">
+              <div class="service-icon-wrap mb-4">
+                <v-icon :icon="service.icon" size="24" color="grey-lighten-2"></v-icon>
+              </div>
+              <h3 class="text-subtitle-1 font-weight-semibold mb-2">{{ service.title }}</h3>
+              <p class="text-body-2 text-medium-emphasis mb-4" style="font-size: 13px;">{{ service.description }}</p>
+              <ul class="service-feature-list">
+                <li v-for="feat in service.features" :key="feat">{{ feat }}</li>
+              </ul>
             </v-card>
           </v-col>
         </v-row>
@@ -208,16 +200,20 @@
             </div>
           </v-col>
           <v-col cols="12" md="6">
-            <v-card class="glass-panel pa-8 rounded-2xl text-center">
-              <v-icon icon="mdi-truck-fast-outline" size="72" color="primary" class="mb-4"></v-icon>
-              <div class="text-h3 font-weight-black text-primary mb-1">99.8%</div>
-              <div class="text-subtitle-1 font-weight-bold mb-4">On-Time Delivery Performance</div>
-              <p class="text-caption text-medium-emphasis mb-6">
+            <v-card class="glass-panel pa-8 rounded-xl">
+              <div class="d-flex align-center gap-4 mb-3">
+                <v-icon icon="mdi-truck-fast-outline" size="36" color="grey-lighten-2"></v-icon>
+                <div>
+                  <div class="text-h4 font-weight-bold" style="letter-spacing: -0.04em;">99.8%</div>
+                  <div class="text-caption text-medium-emphasis">On-Time Delivery Performance</div>
+                </div>
+              </div>
+              <p class="text-caption text-medium-emphasis mb-5">
                 Over 12,000 routes mapped annually across all 48 continental states and cross-border Canadian routes.
               </p>
-              <div class="d-flex justify-center gap-4">
-                <v-chip size="small" variant="tonal" color="info">24hr Express Available</v-chip>
-                <v-chip size="small" variant="tonal" color="success">Direct Dispatch</v-chip>
+              <div class="d-flex gap-3">
+                <v-chip size="x-small" variant="tonal" color="default">24hr Express</v-chip>
+                <v-chip size="x-small" variant="tonal" color="default">Direct Dispatch</v-chip>
               </div>
             </v-card>
           </v-col>
@@ -261,8 +257,8 @@
         <v-row>
           <v-col cols="12" md="4">
             <div class="d-flex align-center mb-3">
-              <v-icon icon="mdi-truck-cargo-container" color="primary" class="mr-2"></v-icon>
-              <span class="text-h6 font-weight-bold">APEX AUTO LOGISTICS</span>
+              <v-icon icon="mdi-truck-cargo-container" color="primary" class="mr-2" size="18"></v-icon>
+              <span class="text-subtitle-2 font-weight-semibold">Apex Auto Logistics</span>
             </div>
             <p class="text-caption text-medium-emphasis mb-4">
               Nationwide DOT-registered carrier and bonded freight brokerage providing secure automobile logistics, multi-car fleet shipping, and exotic vehicle carrier services.
@@ -464,14 +460,14 @@ const reviews = [
 <style scoped>
 .decoy-container {
   min-height: 100vh;
-  background-color: #070b14;
+  background-color: #080b12;
   color: #f1f5f9;
 }
 
 .announcement-bar {
-  background-color: #0b1120;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: #94a3b8;
+  background-color: #0a0d16;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #64748b;
 }
 
 .hero-section {
@@ -484,28 +480,71 @@ const reviews = [
   top: -20%;
   left: 50%;
   transform: translateX(-50%);
-  width: 900px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.18) 0%, rgba(139, 92, 246, 0.05) 50%, transparent 70%);
+  width: 800px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.10) 0%, transparent 65%);
   pointer-events: none;
 }
 
+.hero-eyebrow {
+  display: inline-block;
+}
+
 .text-gradient {
-  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #38bdf8 100%);
+  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 60%, #bfdbfe 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-.nav-link {
-  color: #94a3b8;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  transition: color 0.2s ease;
+/* Service card features list */
+.service-icon-wrap {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.nav-link:hover {
-  color: #60a5fa;
+.service-feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.service-feature-list li {
+  font-size: 12px;
+  color: #94a3b8;
+  padding: 3px 0;
+  padding-left: 14px;
+  position: relative;
+}
+
+.service-feature-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #3b82f6;
+}
+
+.nav-link {
+  color: #64748b;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 0.15s ease;
+}
+
+.nav-link:hover { color: #f1f5f9; }
+
+.footer-section {
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .footer-links {
@@ -514,24 +553,22 @@ const reviews = [
   margin: 0;
 }
 
-.footer-links li {
-  margin-bottom: 8px;
-}
+.footer-links li { margin-bottom: 8px; }
 
 .footer-links a {
-  color: #94a3b8;
+  color: #64748b;
   font-size: 13px;
   text-decoration: none;
-  transition: color 0.2s;
+  transition: color 0.15s ease;
 }
 
-.footer-links a:hover {
-  color: #3b82f6;
-}
+.footer-links a:hover { color: #f1f5f9; }
 
+/* Escrow trigger — completely indistinguishable from surrounding text */
 .escrow-statement-card {
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(13, 17, 23, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
 }
 
 .escrow-policy-term {
@@ -540,6 +577,7 @@ const reviews = [
   cursor: text;
   user-select: text;
   text-decoration: none;
+  display: inline;
 }
 
 .escrow-policy-term:hover {
