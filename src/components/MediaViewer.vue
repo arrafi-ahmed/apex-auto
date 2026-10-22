@@ -4,7 +4,7 @@
     ref="viewerRef"
     class="viewer"
     :class="{ 'is-fullscreen': isFullscreen, 'cursor-hidden': isFullscreen && !hudVisible }"
-    :style="{ '--veil': veil }"
+    :style="{ '--veil': veil, '--bar-top': hudVisible && !isFullscreen ? `${barTop}px` : '0px', '--bar-bottom': hudVisible && !isFullscreen ? `${barBottom}px` : '0px' }"
     role="dialog"
     aria-modal="true"
     aria-label="Media viewer"
@@ -15,7 +15,7 @@
     <div v-if="store.slideshowPlaying && !isFullscreen" class="progress" :style="{ width: `${progressPercent}%` }"></div>
 
     <!-- Top bar -->
-    <div class="bar top" :class="{ 'is-hidden': !hudVisible }">
+    <div ref="topBarRef" class="bar top" :class="{ 'is-hidden': !hudVisible }">
       <div class="meta">
         <span class="name text-truncate">{{ currentMedia?.title || currentMedia?.originalName }}</span>
         <span class="count font-mono tabular">{{ store.viewerActiveIndex + 1 }} / {{ store.displayMedia.length }}</span>
@@ -109,7 +109,7 @@
     </transition>
 
     <!-- Bottom: filmstrip + controls -->
-    <div v-if="!isFullscreen" class="bar bottom" :class="{ 'is-hidden': !hudVisible }">
+    <div v-if="!isFullscreen" ref="bottomBarRef" class="bar bottom" :class="{ 'is-hidden': !hudVisible }">
       <div v-if="store.displayMedia.length > 1" ref="stripRef" class="strip" role="listbox" aria-label="Items">
         <button
           v-for="(m, i) in store.displayMedia"
@@ -128,32 +128,46 @@
       </div>
 
       <div class="controls">
-        <div class="group">
-          <button class="ax-icon-btn" :disabled="percent <= PRESETS[0]" title="Zoom out" @click="zoomOut"><v-icon icon="mdi-minus" size="17"></v-icon></button>
-          <v-menu location="top">
-            <template #activator="{ props }">
-              <button v-bind="props" class="ax-btn is-sm is-outline font-mono zoom-btn" title="Zoom">{{ percent }}%<v-icon icon="mdi-chevron-down"></v-icon></button>
-            </template>
-            <div class="ax-menu zoom-menu">
-              <button class="ax-menu-item" @click="fitWidth">Fit to width</button>
-              <button class="ax-menu-item" @click="resetZoom">Fit to page</button>
-              <div class="ax-menu-sep"></div>
-              <button v-for="p in PRESETS" :key="p" class="ax-menu-item" :class="{ 'is-current': p === percent }" @click="setPercent(p)">{{ p }}%</button>
-            </div>
-          </v-menu>
-          <button class="ax-icon-btn" :disabled="percent >= PRESETS[PRESETS.length - 1]" title="Zoom in" @click="zoomIn"><v-icon icon="mdi-plus" size="17"></v-icon></button>
+        <div class="group zoom-group">
+          <button class="ax-icon-btn" :disabled="percent <= PRESETS[0]" title="Zoom out" @click="zoomOut"><v-icon icon="mdi-minus" size="18"></v-icon></button>
+          <div class="zoom-field" :class="{ 'is-editing': zoomDraft !== null }">
+            <input
+              class="zoom-input font-mono tabular"
+              inputmode="numeric"
+              aria-label="Zoom percentage"
+              :value="zoomDraft ?? percent"
+              @focus="onZoomFocus"
+              @input="zoomDraft = $event.target.value"
+              @keydown.stop="onZoomKey"
+              @blur="commitZoom"
+            />
+            <span class="zoom-unit">%</span>
+            <v-menu location="top" :close-on-content-click="true">
+              <template #activator="{ props }">
+                <button v-bind="props" class="zoom-caret" title="Zoom options" aria-label="Zoom options"><v-icon icon="mdi-chevron-down" size="16"></v-icon></button>
+              </template>
+              <div class="ax-menu zoom-menu">
+                <button class="ax-menu-item" @click="fitWidth">Fit to width</button>
+                <button class="ax-menu-item" @click="resetZoom">Fit to page</button>
+                <div class="ax-menu-sep"></div>
+                <button v-for="p in PRESETS" :key="p" class="ax-menu-item" :class="{ 'is-current': p === percent }" @click="setPercent(p)">{{ p }}%</button>
+              </div>
+            </v-menu>
+          </div>
+          <button class="ax-icon-btn" :disabled="percent >= PRESETS[PRESETS.length - 1]" title="Zoom in" @click="zoomIn"><v-icon icon="mdi-plus" size="18"></v-icon></button>
+          <button class="ax-icon-btn" title="Fit to page" @click="resetZoom"><v-icon icon="mdi-fit-to-screen-outline" size="18"></v-icon></button>
         </div>
 
         <div class="group center">
           <button class="ax-btn is-sm" @click="toggleSlideshow">
-            <v-icon :icon="store.slideshowPlaying ? 'mdi-pause' : 'mdi-play'"></v-icon>{{ store.slideshowPlaying ? 'Pause' : 'Slideshow' }}
+            <v-icon :icon="store.slideshowPlaying ? 'mdi-pause' : 'mdi-play'"></v-icon><span class="btn-label">{{ store.slideshowPlaying ? 'Pause' : 'Slideshow' }}</span>
           </button>
           <button class="ax-icon-btn" :class="{ 'is-active': store.slideshowShuffle }" title="Shuffle" @click="store.slideshowShuffle = !store.slideshowShuffle">
             <v-icon icon="mdi-shuffle-variant" size="17"></v-icon>
           </button>
           <v-menu location="top">
             <template #activator="{ props }">
-              <button v-bind="props" class="ax-btn is-sm is-outline font-mono">{{ store.slideshowInterval }}s<v-icon icon="mdi-chevron-up"></v-icon></button>
+              <button v-bind="props" class="ax-btn is-sm is-outline font-mono" title="Seconds per slide" aria-label="Seconds per slide">{{ store.slideshowInterval }}s<v-icon icon="mdi-chevron-up"></v-icon></button>
             </template>
             <div class="ax-menu" style="min-width: 110px">
               <button v-for="sec in [1, 2, 3, 5, 8, 10, 15]" :key="sec" class="ax-menu-item font-mono" @click="setRotationInterval(sec)">
@@ -191,7 +205,7 @@
           <li><span>Fullscreen</span><kbd>F</kbd></li>
           <li><span>Close</span><kbd>Esc</kbd></li>
         </ul>
-        <p class="ax-hint" style="margin-top: 14px">On touch: swipe to navigate, pinch or double-tap to zoom, swipe down to close.</p>
+        <p class="ax-hint" style="margin-top: 14px">Double-click (or double-tap) zooms in and back out. On touch: swipe to navigate, pinch to zoom, swipe down to close.</p>
       </div>
     </v-dialog>
   </div>
@@ -205,6 +219,11 @@ const store = useVaultStore()
 const viewerRef = ref(null)
 const stageRef = ref(null)
 const stripRef = ref(null)
+const topBarRef = ref(null)
+const bottomBarRef = ref(null)
+const barTop = ref(0)
+const barBottom = ref(0)
+const zoomDraft = ref(null)
 const videoPlayerRef = ref(null)
 
 // UI state
@@ -235,6 +254,7 @@ let pinchStartDist = 0
 let pinchStartScale = 1
 let lastTap = { t: 0, x: 0, y: 0 }
 let lastPointerType = 'mouse'
+let tapTimer = null
 
 // Slideshow
 const progressPercent = ref(0)
@@ -252,7 +272,7 @@ const currentMedia = computed(() => store.activeMediaItem)
 // Scale at which the whole image fits the stage (actual-pixel ratio)
 const fit = computed(() => {
   const n = natural.value.w ? natural.value : { w: currentMedia.value?.width || 0, h: currentMedia.value?.height || 0 }
-  if (!n.w || !n.h || !stageSize.value.w) return 1
+  if (!n.w || !n.h || !stageSize.value.w || !stageSize.value.h) return 1
   return Math.min(stageSize.value.w / n.w, stageSize.value.h / n.h)
 })
 const percent = computed(() => Math.round(scale.value * fit.value * 100))
@@ -426,21 +446,45 @@ async function deleteCurrent() {
 // ---- Zoom ----
 const clampScale = (v) => Math.min(8 / fit.value, Math.max(0.1 / fit.value, v))
 
-function setScale(v) {
-  scale.value = clampScale(v)
-  if (!canPan.value) {
-    panX.value = 0
-    panY.value = 0
+// Keeps a zoomed image from being dragged completely out of view
+function clampPan() {
+  const n = natural.value
+  if (!n.w || !canPan.value) {
+    if (!canPan.value) { panX.value = 0; panY.value = 0 }
+    return
   }
+  const maxX = Math.max(0, (n.w * fit.value * scale.value - stageSize.value.w) / 2)
+  const maxY = Math.max(0, (n.h * fit.value * scale.value - stageSize.value.h) / 2)
+  panX.value = Math.min(maxX, Math.max(-maxX, panX.value))
+  panY.value = Math.min(maxY, Math.max(-maxY, panY.value))
+}
+
+// Zoom keeping the point under (cx, cy) fixed on screen; defaults to the stage centre
+function zoomAt(newScale, cx, cy) {
+  const r = stageRef.value?.getBoundingClientRect()
+  const s0 = scale.value
+  const s1 = clampScale(newScale)
+  if (r && cx != null) {
+    const dx = cx - (r.left + r.width / 2)
+    const dy = cy - (r.top + r.height / 2)
+    panX.value = dx - (s1 / s0) * (dx - panX.value)
+    panY.value = dy - (s1 / s0) * (dy - panY.value)
+  }
+  scale.value = s1
+  clampPan()
+}
+
+function setScale(v) {
+  zoomAt(v)
 }
 
 function setPercent(p) {
-  setScale(p / 100 / fit.value)
+  zoomAt(p / 100 / fit.value)
 }
 
 function onWheel(e) {
   if (currentMedia.value?.isVideo) return
-  setScale(scale.value * (e.deltaY > 0 ? 0.9 : 1.1))
+  zoomAt(scale.value * (e.deltaY > 0 ? 0.9 : 1.1), e.clientX, e.clientY)
 }
 
 // Menu-style stepping: jump to the next preset above/below the current zoom
@@ -470,16 +514,52 @@ function fitWidth() {
   panY.value = shownH > stageSize.value.h ? (shownH - stageSize.value.h) / 2 : 0
 }
 
-// Z / double-click: fit page <-> actual pixels
-function toggleFullScale() {
-  if (Math.abs(scale.value - 1) < 0.01) setPercent(100)
-  else resetZoom()
+// Double-click / double-tap / Z: zoom in around the pointer (at least 2x the fitted size, never
+// below actual pixels), and the next one goes back to the fitted view.
+function toggleZoomAt(cx, cy) {
+  if (Math.abs(scale.value - 1) < 0.02) {
+    const target = Math.min(800, Math.max(100, Math.round(fit.value * 200)))
+    zoomAt(target / 100 / fit.value, cx, cy)
+  } else {
+    resetZoom()
+  }
 }
+const toggleFullScale = () => toggleZoomAt()
 
-function onDoubleClick() {
+function onDoubleClick(e) {
   // Touch double-taps are handled in the pointer logic
   if (lastPointerType === 'touch' || currentMedia.value?.isVideo) return
-  toggleFullScale()
+  toggleZoomAt(e.clientX, e.clientY)
+}
+
+// ---- Editable zoom field ----
+function onZoomFocus(e) {
+  zoomDraft.value = String(percent.value)
+  e.target.select()
+}
+
+function commitZoom() {
+  if (zoomDraft.value === null) return
+  const value = parseInt(zoomDraft.value, 10)
+  zoomDraft.value = null
+  if (Number.isFinite(value)) setPercent(Math.min(800, Math.max(10, value)))
+}
+
+function onZoomKey(e) {
+  if (e.key === 'Enter') {
+    commitZoom()
+    e.target.blur()
+    viewerRef.value?.focus()
+  } else if (e.key === 'Escape') {
+    zoomDraft.value = null
+    e.target.blur()
+    viewerRef.value?.focus()
+  } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    e.preventDefault()
+    zoomDraft.value = null
+    if (e.key === 'ArrowUp') zoomIn()
+    else zoomOut()
+  }
 }
 
 function formatBytes(bytes) {
@@ -567,6 +647,7 @@ function onPointerUp(e) {
   const g = gesture.value
   gesture.value = null
   isPanning.value = false
+  const isTap = e.pointerType === 'touch' && Math.hypot(e.clientX - startPt.x, e.clientY - startPt.y) < 10 && Date.now() - startPt.t < 500
 
   if (g === 'swipe-x') {
     const dx = dragX.value
@@ -580,16 +661,25 @@ function onPointerUp(e) {
     const dy = dragY.value
     dragY.value = 0
     if (dy > 110) close()
-  } else if (g === 'pending') {
-    // A tap: single tap toggles the controls, double tap zooms
-    const now = Date.now()
-    if (now - lastTap.t < 300 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
-      if (!currentMedia.value?.isVideo) toggleFullScale()
-      lastTap = { t: 0, x: 0, y: 0 }
-    } else {
-      lastTap = { t: now, x: e.clientX, y: e.clientY }
-    }
-    hudVisible.value = !hudVisible.value
+  } else if (g === 'pending' || (g === 'pan' && isTap)) {
+    handleTap(e.clientX, e.clientY)
+  } else if (g === 'pan') {
+    clampPan()
+  }
+}
+
+// A tap: single tap toggles the controls (after a short wait), double tap zooms in/out. Works
+// while zoomed in as well, where a touch normally starts a pan.
+function handleTap(x, y) {
+  const now = Date.now()
+  if (now - lastTap.t < 300 && Math.hypot(x - lastTap.x, y - lastTap.y) < 30) {
+    clearTimeout(tapTimer)
+    if (!currentMedia.value?.isVideo) toggleZoomAt(x, y)
+    lastTap = { t: 0, x: 0, y: 0 }
+  } else {
+    lastTap = { t: now, x, y }
+    clearTimeout(tapTimer)
+    tapTimer = setTimeout(() => { hudVisible.value = !hudVisible.value }, 280)
   }
 }
 
@@ -665,6 +755,28 @@ function handleKeydown(e) {
   }
 }
 
+// The stage grows into the space of hidden toolbars: watch its size and the bars' heights
+let stageObserver = null
+let barObserver = null
+function measureBars() {
+  barTop.value = topBarRef.value?.offsetHeight || 0
+  barBottom.value = bottomBarRef.value?.offsetHeight || 0
+}
+watch(stageRef, (el, old) => {
+  if (old && stageObserver) stageObserver.unobserve(old)
+  if (el) {
+    stageObserver ||= new ResizeObserver(() => measureStage())
+    stageObserver.observe(el)
+  }
+})
+watch([topBarRef, bottomBarRef], () => {
+  barObserver ||= new ResizeObserver(() => measureBars())
+  barObserver.disconnect()
+  if (topBarRef.value) barObserver.observe(topBarRef.value)
+  if (bottomBarRef.value) barObserver.observe(bottomBarRef.value)
+  nextTick(measureBars)
+})
+
 onMounted(() => {
   document.addEventListener('fullscreenchange', handleFullscreenChange)
   window.addEventListener('resize', measureStage)
@@ -673,14 +785,17 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
   window.removeEventListener('resize', measureStage)
+  stageObserver?.disconnect()
+  barObserver?.disconnect()
   stopSlideshowTimer()
   clearTimeout(hudTimer)
+  clearTimeout(tapTimer)
 })
 </script>
 
 <style scoped>
 .viewer {
-  position: fixed; inset: 0; z-index: 99999; display: flex; flex-direction: column;
+  position: fixed; inset: 0; z-index: 1800; /* below Vuetify overlays (menus 2000, dialogs 2400) so they open on top */
   background: rgba(6, 6, 8, var(--veil, 1)); outline: none; user-select: none; -webkit-user-select: none;
 }
 .viewer.is-fullscreen { background: #000; }
@@ -689,12 +804,12 @@ onUnmounted(() => {
 
 /* ── Bars ── */
 .bar {
-  position: relative; z-index: 5; display: flex; background: rgba(var(--v-theme-background), 0.72);
+  position: absolute; left: 0; right: 0; z-index: 5; display: flex; background: rgba(var(--v-theme-background), 0.72);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   transition: opacity 0.3s var(--ax-ease), transform 0.3s var(--ax-ease);
 }
-.bar.top { align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px 10px 20px; border-bottom: 1px solid var(--ax-line); }
-.bar.bottom { flex-direction: column; border-top: 1px solid var(--ax-line); }
+.bar.top { top: 0; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px 10px 20px; border-bottom: 1px solid var(--ax-line); }
+.bar.bottom { bottom: 0; flex-direction: column; border-top: 1px solid var(--ax-line); }
 .bar.top.is-hidden { opacity: 0; transform: translateY(-100%); pointer-events: none; }
 .bar.bottom.is-hidden { opacity: 0; transform: translateY(100%); pointer-events: none; }
 .meta { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
@@ -709,7 +824,13 @@ onUnmounted(() => {
 .controls .group { flex: 1; }
 .controls .group.center { justify-content: center; gap: 8px; }
 .controls .group.end { justify-content: flex-end; }
-.zoom-btn { min-width: 76px; }
+.zoom-group { gap: 2px; }
+.zoom-field { display: inline-flex; align-items: center; height: 32px; padding: 0 2px 0 10px; border-radius: 8px; border: 1px solid var(--ax-line-strong); background: var(--ax-bg); transition: border-color var(--ax-fast), box-shadow var(--ax-fast); }
+.zoom-field:focus-within, .zoom-field.is-editing { border-color: var(--ax-accent); box-shadow: 0 0 0 3px var(--ax-accent-soft); }
+.zoom-input { width: 38px; padding: 0; border: 0; background: transparent; color: var(--ax-text); font-size: 13px; text-align: right; outline: none; }
+.zoom-unit { margin: 0 2px 0 1px; font-size: 13px; color: var(--ax-text-2); }
+.zoom-caret { display: grid; place-items: center; width: 26px; height: 26px; margin-left: 2px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ax-text-2); cursor: pointer; }
+.zoom-caret:hover { background: rgba(var(--v-theme-on-surface), 0.08); color: var(--ax-text); }
 .zoom-menu { min-width: 170px; max-height: min(70vh, 460px); overflow-y: auto; }
 .zoom-menu .ax-menu-item.is-current { color: var(--ax-accent); background: var(--ax-accent-soft); }
 
@@ -727,7 +848,10 @@ onUnmounted(() => {
 .strip-play { position: absolute; right: 3px; bottom: 3px; color: #fff; filter: drop-shadow(0 0 3px #000); }
 
 /* ── Stage ── */
-.stage { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; }
+.stage {
+  position: absolute; left: 0; right: 0; top: var(--bar-top, 0px); bottom: var(--bar-bottom, 0px); overflow: hidden; touch-action: none;
+  transition: top 0.28s var(--ax-ease), bottom 0.28s var(--ax-ease);
+}
 .frame { position: absolute; inset: 0; transition: transform 0.18s var(--ax-ease); will-change: transform; }
 .frame.is-dragging { transition: none; }
 .layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
@@ -784,8 +908,13 @@ kbd {
   .arrow, .strip { display: none; }
   .bar.top { padding: 8px 8px 8px 14px; }
   .controls { padding: 8px 10px; }
-  .controls .group:first-child { display: none; }
-  .controls .group.center { justify-content: flex-start; }
+  .controls { gap: 8px; }
+  .controls .group { flex: 0 0 auto; }
+  .controls .group.zoom-group { flex: 1 1 auto; }
+  .controls .group.center { justify-content: flex-end; gap: 4px; }
+  .controls .group.center > .ax-icon-btn { display: none; }
+  .btn-label { display: none; }
+  .controls .group.end { display: none; }
   .info { top: 49px; }
 }
 @media (prefers-reduced-motion: reduce) {

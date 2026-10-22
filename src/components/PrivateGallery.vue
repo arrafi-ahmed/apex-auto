@@ -15,7 +15,7 @@
         </nav>
 
         <div class="topbar-actions">
-          <div class="lock-chip font-mono" :class="{ 'is-low': store.secondsRemainingUntilAutoLock < 120 }" :title="`Auto-lock in ${formatLockCountdown(store.secondsRemainingUntilAutoLock)}`">
+          <div v-if="store.secondsRemainingUntilAutoLock < 120" class="lock-chip font-mono is-low" :title="`Auto-lock in ${formatLockCountdown(store.secondsRemainingUntilAutoLock)}`">
             <span class="lock-dot"></span>{{ formatLockCountdown(store.secondsRemainingUntilAutoLock) }}
           </div>
           <button class="ax-icon-btn" title="Preferences" @click="store.settingsModalOpen = true">
