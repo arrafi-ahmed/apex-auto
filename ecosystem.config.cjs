@@ -8,9 +8,10 @@ module.exports = {
       watch: false,
       max_memory_restart: '800M',
       env_file: '.env',
+      // PORT and the rest of the configuration come from .env (loaded by the server itself);
+      // setting PORT here would override it with the deploy shell's value, or 3000 when unset.
       env: {
-        NODE_ENV: 'production',
-        PORT: process.env.PORT || 3000
+        NODE_ENV: 'production'
       }
     }
   ]
