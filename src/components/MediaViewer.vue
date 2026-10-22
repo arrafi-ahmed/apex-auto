@@ -3,13 +3,14 @@
     v-if="store.viewerOpen"
     ref="viewerRef"
     class="media-viewer-root"
+    :class="{ 'is-fullscreen': isFullscreen, 'cursor-hidden': isFullscreen && !hudVisible }"
     tabindex="0"
     @keydown="handleKeydown"
     @mousemove="onMouseMoveViewer"
   >
-    <!-- Slideshow Progress Line -->
+    <!-- Slideshow Progress Line (Only in windowed mode) -->
     <div
-      v-if="store.slideshowPlaying"
+      v-if="store.slideshowPlaying && !isFullscreen"
       class="slideshow-progress-line"
       :style="{ width: `${progressPercent}%` }"
     ></div>
@@ -20,35 +21,27 @@
       :class="{ 'viewer-hud-hidden': !hudVisible }"
     >
       <div class="d-flex align-center gap-3">
-        <v-chip size="small" :color="currentMedia?.isVideo ? 'deep-purple-accent-2' : 'blue-darken-1'" variant="flat" class="font-weight-bold">
-          <v-icon :icon="currentMedia?.isVideo ? 'mdi-video' : 'mdi-image'" start size="16"></v-icon>
-          {{ currentMedia?.isVideo ? 'VIDEO' : 'IMAGE' }}
-        </v-chip>
-        <span class="text-subtitle-2 font-weight-bold text-truncate" style="max-width: 32vw;">
+        <span class="text-subtitle-2 font-weight-medium text-truncate" style="max-width: 45vw;">
           {{ currentMedia?.title || currentMedia?.originalName }}
         </span>
-        <v-chip size="x-small" variant="outlined" color="grey-lighten-1" class="font-mono">
+        <span class="text-caption text-medium-emphasis font-mono">
           {{ store.viewerActiveIndex + 1 }} / {{ store.currentMedia.length }}
-        </v-chip>
-        <v-chip v-if="dimensions" size="x-small" variant="outlined" color="blue-lighten-2" class="font-mono text-caption d-none d-md-inline-flex">
-          {{ dimensions }}
-        </v-chip>
-        <v-chip size="x-small" color="teal" variant="tonal" class="font-mono text-caption d-none d-sm-inline-flex" title="Uncompressed original file">
-          <v-icon icon="mdi-check-decagram" size="12" class="mr-1"></v-icon>
-          FULL SIZE ({{ formatBytes(currentMedia?.size) }})
-        </v-chip>
+        </span>
+        <span v-if="dimensions" class="text-caption text-disabled font-mono d-none d-md-inline">
+          • {{ dimensions }}
+        </span>
       </div>
 
-      <div class="d-flex align-center gap-2">
+      <div class="d-flex align-center gap-1">
         <!-- Direct Raw Download Button -->
         <v-btn
-          icon="mdi-download"
+          icon="mdi-download-outline"
           variant="text"
           color="white"
           size="small"
           :href="`/media-stream/${currentMedia?.id}`"
           :download="currentMedia?.originalName || 'media'"
-          title="Download Raw Full-Size Original (D)"
+          title="Download (D)"
         ></v-btn>
 
         <!-- Keyboard Shortcuts Help -->
@@ -58,20 +51,8 @@
           color="white"
           size="small"
           @click="showHelp = !showHelp"
-          title="Keyboard Shortcuts (?)"
+          title="Shortcuts (?)"
         ></v-btn>
-
-        <!-- Slideshow Status Indicator -->
-        <v-chip
-          v-if="store.slideshowPlaying"
-          size="small"
-          color="amber"
-          variant="tonal"
-          class="font-weight-bold d-none d-sm-flex"
-        >
-          <v-icon icon="mdi-play-circle" start size="16"></v-icon>
-          Slideshow ({{ store.slideshowInterval }}s)
-        </v-chip>
 
         <!-- Fullscreen Button -->
         <v-btn
@@ -87,15 +68,13 @@
 
         <!-- Close Button -->
         <v-btn
-          icon
+          icon="mdi-close"
           variant="text"
           color="white"
           size="small"
           @click="close"
           title="Close (Esc)"
-        >
-          <v-icon icon="mdi-close"></v-icon>
-        </v-btn>
+        ></v-btn>
       </div>
     </div>
 
@@ -140,82 +119,81 @@
     <v-btn
       icon="mdi-chevron-left"
       variant="flat"
-      color="rgba(15, 23, 42, 0.75)"
       class="nav-arrow left-arrow"
       :class="{ 'viewer-hud-hidden': !hudVisible }"
-      size="large"
+      size="default"
       @click="prev"
       title="Previous (Left Arrow)"
     ></v-btn>
     <v-btn
       icon="mdi-chevron-right"
       variant="flat"
-      color="rgba(15, 23, 42, 0.75)"
       class="nav-arrow right-arrow"
       :class="{ 'viewer-hud-hidden': !hudVisible }"
-      size="large"
+      size="default"
       @click="next"
       title="Next (Right Arrow)"
     ></v-btn>
 
-    <!-- Bottom Controls Deck -->
+    <!-- Bottom Controls Deck (Only in non-fullscreen windowed mode) -->
     <div
+      v-if="!isFullscreen"
       class="viewer-bottom-bar d-flex align-center justify-space-between px-6 py-2"
       :class="{ 'viewer-hud-hidden': !hudVisible }"
     >
       <!-- Zoom Controls -->
       <div class="d-flex align-center gap-1">
-        <v-btn icon="mdi-magnify-minus-outline" size="small" variant="text" color="grey-lighten-1" @click="zoomOut" :disabled="scale <= 1"></v-btn>
+        <v-btn icon="mdi-minus" size="small" variant="text" color="grey-lighten-1" @click="zoomOut" :disabled="scale <= 1"></v-btn>
         <span class="text-caption font-mono text-medium-emphasis px-1">{{ Math.round(scale * 100) }}%</span>
-        <v-btn icon="mdi-magnify-plus-outline" size="small" variant="text" color="grey-lighten-1" @click="zoomIn" :disabled="scale >= 5"></v-btn>
+        <v-btn icon="mdi-plus" size="small" variant="text" color="grey-lighten-1" @click="zoomIn" :disabled="scale >= 5"></v-btn>
         <v-btn size="x-small" variant="tonal" :color="scale === 1 ? 'grey' : 'primary'" class="text-none ml-1" @click="toggleFullScale">
-          {{ scale === 1 ? '100% (1:1)' : 'Reset Fit' }}
+          {{ scale === 1 ? '1:1' : 'Fit' }}
         </v-btn>
       </div>
 
       <!-- Slideshow Central Controls -->
       <div class="d-flex align-center gap-3">
         <v-btn
-          :color="store.slideshowPlaying ? 'amber' : 'primary'"
-          variant="flat"
-          class="text-none font-weight-bold px-4 rounded-pill"
+          variant="tonal"
+          size="small"
+          class="text-none rounded-pill font-weight-medium"
           :prepend-icon="store.slideshowPlaying ? 'mdi-pause' : 'mdi-play'"
           @click="toggleSlideshow"
         >
-          {{ store.slideshowPlaying ? 'Pause Slideshow' : 'Play Slideshow' }}
+          {{ store.slideshowPlaying ? 'Pause' : 'Slideshow' }}
         </v-btn>
 
         <!-- Interval Dropdown Menu -->
         <v-menu location="top">
           <template #activator="{ props }">
-            <v-btn v-bind="props" variant="outlined" color="grey-lighten-1" size="small" class="text-none rounded-pill font-mono">
-              <v-icon icon="mdi-timer-outline" start size="14"></v-icon>
-              {{ store.slideshowInterval }}s Interval
+            <v-btn v-bind="props" variant="text" color="grey-lighten-1" size="small" class="text-none font-mono">
+              {{ store.slideshowInterval }}s
             </v-btn>
           </template>
           <v-list density="compact" bg-color="#0f172a" class="border">
             <v-list-item
-              v-for="sec in [1, 2, 3, 5, 8, 10, 15, 30]"
+              v-for="sec in [1, 2, 3, 5, 8, 10, 15]"
               :key="sec"
               :active="store.slideshowInterval === sec"
               @click="setRotationInterval(sec)"
             >
-              <v-list-item-title class="font-mono">{{ sec }} Seconds</v-list-item-title>
+              <v-list-item-title class="font-mono text-caption">{{ sec }}s</v-list-item-title>
             </v-list-item>
           </v-list>
         </v-menu>
       </div>
 
-      <!-- Slideshow Config Toggles -->
-      <div class="d-flex align-center gap-3">
-        <v-switch
-          v-model="store.skipVideosInSlideshow"
-          color="primary"
-          density="compact"
-          hide-details
-          label="Skip Videos in Slideshow"
-          class="text-caption"
-        ></v-switch>
+      <!-- Quick Mute / Audio for Video -->
+      <div class="d-flex align-center">
+        <v-btn
+          v-if="currentMedia?.isVideo"
+          :icon="isMuted ? 'mdi-volume-off' : 'mdi-volume-high'"
+          size="small"
+          variant="text"
+          color="white"
+          @click="toggleMute"
+          title="Mute / Unmute (M)"
+        ></v-btn>
       </div>
     </div>
 
@@ -310,12 +288,13 @@ let hudTimer = null
 function onMouseMoveViewer() {
   hudVisible.value = true
   if (hudTimer) clearTimeout(hudTimer)
+  const idleMs = isFullscreen.value ? 1500 : 2500
   hudTimer = setTimeout(() => {
     // Only auto-hide if scale is 1 or user isn't actively panning
     if (!isPanning.value && !showHelp.value) {
       hudVisible.value = false
     }
-  }, 2500)
+  }, idleMs)
 }
 
 function onImageLoad(e) {
@@ -498,6 +477,16 @@ function toggleFullscreen() {
 
 function handleFullscreenChange() {
   isFullscreen.value = !!document.fullscreenElement
+  if (isFullscreen.value) {
+    if (hudTimer) clearTimeout(hudTimer)
+    hudTimer = setTimeout(() => {
+      if (!isPanning.value && !showHelp.value) {
+        hudVisible.value = false
+      }
+    }, 1500)
+  } else {
+    hudVisible.value = true
+  }
 }
 
 // Navigation
@@ -562,18 +551,52 @@ onUnmounted(() => {
   user-select: none;
 }
 
+/* Fullscreen Immersion */
+.media-viewer-root.is-fullscreen {
+  background-color: #000000 !important;
+}
+
+.media-viewer-root.cursor-hidden,
+.media-viewer-root.cursor-hidden * {
+  cursor: none !important;
+}
+
+.slideshow-progress-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: #3b82f6;
+  z-index: 100;
+  transition: width 0.1s linear;
+}
+
 .viewer-top-bar {
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(12px);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   z-index: 10;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.viewer-top-bar.viewer-hud-hidden {
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
 }
 
 .viewer-bottom-bar {
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(12px);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   z-index: 10;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.viewer-bottom-bar.viewer-hud-hidden {
+  opacity: 0;
+  transform: translateY(100%);
+  pointer-events: none;
 }
 
 .viewer-stage {
@@ -587,6 +610,10 @@ onUnmounted(() => {
   position: relative;
 }
 
+.is-fullscreen .viewer-stage {
+  padding: 0;
+}
+
 .viewer-media-element {
   max-width: 90vw;
   max-height: 80vh;
@@ -594,6 +621,13 @@ onUnmounted(() => {
   transition: transform 0.05s ease-out;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
   border-radius: 8px;
+}
+
+.is-fullscreen .viewer-media-element {
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 .viewer-video-element {
@@ -604,12 +638,33 @@ onUnmounted(() => {
   background: #000;
 }
 
+.is-fullscreen .viewer-video-element {
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
 .nav-arrow {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
   z-index: 10;
-  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.35) !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  transition: opacity 0.3s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.nav-arrow:hover {
+  background: rgba(0, 0, 0, 0.7) !important;
+  color: #ffffff !important;
+}
+
+.nav-arrow.viewer-hud-hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .left-arrow {

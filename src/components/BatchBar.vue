@@ -3,8 +3,8 @@
     <!-- Floating Action Bar -->
     <v-fade-transition>
       <div v-if="store.selectedCount > 0" class="floating-batch-bar d-flex align-center gap-3">
-        <v-chip color="primary" variant="flat" size="small" class="font-weight-bold font-mono">
-          {{ store.selectedCount }} SELECTED
+        <v-chip color="primary" variant="flat" size="small" class="font-weight-medium">
+          {{ store.selectedCount }} selected
         </v-chip>
 
         <v-divider vertical class="mx-1 my-2 opacity-20"></v-divider>

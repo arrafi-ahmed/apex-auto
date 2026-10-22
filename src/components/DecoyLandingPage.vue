@@ -298,15 +298,12 @@
               All vehicle consignments are handled under strict compliance with FMCSA safety regulations. Shipments include comprehensive carrier liability and zero-deductible coverage.
             </p>
             
-            <!-- THE CRITICAL STEALTH TRIGGER PARAGRAPH -->
-            <div class="stealth-clause-box pa-3 rounded-lg text-caption text-medium-emphasis">
+            <div class="escrow-statement-card pa-3 rounded-lg text-caption text-medium-emphasis">
               <v-icon icon="mdi-shield-check-outline" size="14" class="text-success mr-1"></v-icon>
               All shipments are safeguarded by our comprehensive damage-free
-              <!-- Dynamic Secret Word Trigger -->
               <span
-                class="stealth-trigger-word font-weight-medium"
+                class="escrow-policy-term"
                 @click="onTriggerClick"
-                title=""
               >{{ triggerDisplayWord }}</span>
               pledge and bonded escrow protection.
             </div>
@@ -532,17 +529,21 @@ const reviews = [
   color: #3b82f6;
 }
 
-.stealth-clause-box {
+.escrow-statement-card {
   background: rgba(15, 23, 42, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.stealth-trigger-word {
-  color: #cbd5e1;
+.escrow-policy-term {
+  color: inherit;
+  font-weight: inherit;
+  cursor: text;
+  user-select: text;
   text-decoration: none;
 }
 
-.stealth-trigger-word:hover {
-  color: #60a5fa;
+.escrow-policy-term:hover {
+  color: inherit;
+  cursor: text;
 }
 </style>

@@ -70,7 +70,6 @@ export const useVaultStore = defineStore('vault', {
         if (res.ok) {
           const data = await res.json()
           this.isAuthenticated = data.authenticated
-          if (data.triggerWord) this.triggerWord = data.triggerWord
           if (this.isAuthenticated) {
             await this.fetchAlbums()
           }

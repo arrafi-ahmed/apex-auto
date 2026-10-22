@@ -199,10 +199,8 @@ app.get('/api/auth/status', (req, res) => {
   if (lock && (lock.permanent || !lock.lockedUntil || Date.now() < lock.lockedUntil)) {
     return sendCamouflage503(res)
   }
-  const db = loadDB()
   res.json({
-    authenticated: isAuthenticated(req),
-    triggerWord: db.settings.secretTriggerWord || 'guarantee'
+    authenticated: isAuthenticated(req)
   })
 })
 

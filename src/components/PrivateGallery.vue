@@ -5,20 +5,17 @@
     @dragover.prevent
   >
     <!-- Top Vault App Bar -->
-    <v-app-bar flat class="glass-nav px-4" height="68">
+    <!-- Top Minimal App Bar -->
+    <v-app-bar flat class="glass-nav px-4" height="60">
       <div class="d-flex align-center gap-3">
-        <v-avatar color="primary" variant="tonal" rounded="lg" size="38">
-          <v-icon icon="mdi-shield-lock" size="22" color="primary"></v-icon>
-        </v-avatar>
+        <v-icon icon="mdi-view-gallery-outline" size="22" color="primary"></v-icon>
         <div>
-          <div class="text-subtitle-1 font-weight-black d-flex align-center gap-2">
-            <span>SECURE VAULT</span>
-            <v-chip size="x-small" color="blue" variant="flat" class="font-mono">NODE-09</v-chip>
-          </div>
-          <div class="text-caption text-medium-emphasis">
-            <span v-if="!store.activeAlbum">Private Albums Index</span>
-            <span v-else class="text-primary cursor-pointer" @click="store.activeAlbum = null">
-              Albums &gt; <strong class="text-white">{{ store.activeAlbum.title }}</strong>
+          <div class="text-subtitle-1 font-weight-bold">
+            <span v-if="!store.activeAlbum">Gallery</span>
+            <span v-else class="cursor-pointer" @click="store.activeAlbum = null">
+              <span class="text-medium-emphasis">Albums</span>
+              <span class="mx-2 text-disabled">/</span>
+              <span>{{ store.activeAlbum.title }}</span>
             </span>
           </div>
         </div>
@@ -28,24 +25,13 @@
 
       <!-- Action Buttons -->
       <div class="d-flex align-center gap-2">
-        <!-- Inactivity Auto-Lock Countdown Badge -->
-        <v-chip
-          size="x-small"
-          variant="tonal"
-          color="grey-lighten-1"
-          class="font-mono text-caption d-none d-md-flex align-center mr-1"
-          title="Inactivity Auto-Lock timer (resets on user activity)"
-        >
-          <v-icon icon="mdi-timer-sand" size="13" class="mr-1 text-warning"></v-icon>
-          Auto-lock: {{ formatLockCountdown(store.secondsRemainingUntilAutoLock) }}
-        </v-chip>
-
         <!-- New Album Button (when in albums view) -->
         <v-btn
           v-if="!store.activeAlbum"
           color="primary"
           variant="flat"
-          prepend-icon="mdi-folder-plus-outline"
+          size="small"
+          prepend-icon="mdi-plus"
           class="text-none font-weight-bold"
           @click="openNewAlbumModal"
         >
@@ -58,23 +44,24 @@
           <v-btn
             color="primary"
             variant="flat"
-            prepend-icon="mdi-cloud-upload-outline"
+            size="small"
+            prepend-icon="mdi-upload"
             class="text-none font-weight-bold"
             @click="triggerFileInput"
           >
-            Upload Media
+            Upload
           </v-btn>
 
           <!-- Slideshow Button -->
           <v-btn
-            color="accent"
             variant="tonal"
-            prepend-icon="mdi-play-circle-outline"
-            class="text-none font-weight-bold"
+            size="small"
+            prepend-icon="mdi-play"
+            class="text-none font-weight-medium"
             :disabled="!store.currentMedia.length"
             @click="store.startSlideshow"
           >
-            Slideshow ({{ store.slideshowInterval }}s)
+            Slideshow
           </v-btn>
 
           <!-- Select All / Toggle Selection -->
@@ -85,33 +72,29 @@
             class="text-none"
             @click="toggleBatchSelect"
           >
-            <v-icon :icon="store.selectedCount > 0 ? 'mdi-checkbox-multiple-marked' : 'mdi-checkbox-multiple-blank-outline'" start size="16"></v-icon>
-            {{ store.selectedCount > 0 ? 'Deselect All' : 'Select All' }}
+            {{ store.selectedCount > 0 ? 'Deselect All' : 'Select' }}
           </v-btn>
         </template>
 
-        <!-- Settings Button -->
+        <!-- Preferences Button -->
         <v-btn
-          icon
+          icon="mdi-tune"
           variant="text"
+          size="small"
           color="grey-lighten-1"
           @click="store.settingsModalOpen = true"
-          title="Vault Settings"
-        >
-          <v-icon icon="mdi-cog-outline"></v-icon>
-        </v-btn>
+          title="Preferences"
+        ></v-btn>
 
-        <!-- PANIC / QUICK ESCAPE BUTTON -->
+        <!-- Discreet Lock Button -->
         <v-btn
-          color="error"
-          variant="flat"
-          class="text-none font-weight-bold px-3 ml-2"
-          prepend-icon="mdi-door-open"
+          icon="mdi-lock-outline"
+          variant="text"
+          size="small"
+          color="grey-lighten-1"
           @click="store.panicLock"
-          title="Emergency Lockout (Esc key)"
-        >
-          Panic Exit
-        </v-btn>
+          title="Lock"
+        ></v-btn>
       </div>
     </v-app-bar>
 
@@ -132,12 +115,12 @@
         <div v-if="!store.activeAlbum">
           <div class="d-flex flex-wrap align-center justify-space-between mb-6 pb-3 border-b">
             <div>
-              <h1 class="text-h4 font-weight-black mb-1">
-                {{ store.adminViewMode === 'manager' ? 'Album Administration & Storage' : 'Encrypted Albums' }}
+              <h1 class="text-h5 font-weight-bold mb-1">
+                {{ store.adminViewMode === 'manager' ? 'Album Manager' : 'Albums' }}
               </h1>
               <p class="text-caption text-medium-emphasis mb-0">
-                {{ store.albums.length }} albums • 
-                {{ store.vaultStats?.totalSizeFormatted || 'Full-Size' }} Total Vault Storage
+                {{ store.albums.length }} collections • 
+                {{ store.vaultStats?.totalSizeFormatted || '' }} Storage
               </p>
             </div>
 
@@ -152,11 +135,11 @@
               >
                 <v-btn value="gallery" size="small" class="text-none">
                   <v-icon icon="mdi-view-grid-outline" size="16" class="mr-1"></v-icon>
-                  Gallery
+                  Grid
                 </v-btn>
                 <v-btn value="manager" size="small" class="text-none">
                   <v-icon icon="mdi-folder-cog-outline" size="16" class="mr-1"></v-icon>
-                  Album Manager
+                  Manage
                 </v-btn>
               </v-btn-toggle>
 
@@ -164,7 +147,7 @@
                 color="primary"
                 variant="flat"
                 size="small"
-                prepend-icon="mdi-folder-plus-outline"
+                prepend-icon="mdi-plus"
                 class="text-none font-weight-bold ml-2"
                 @click="openNewAlbumModal"
               >
@@ -196,10 +179,7 @@
                     alt="Album Cover"
                   />
                   <div v-else class="w-100 h-100 d-flex align-center justify-center bg-card">
-                    <v-icon icon="mdi-folder-image" size="48" color="grey-darken-1"></v-icon>
-                  </div>
-                  <div class="minimal-badge badge-image">
-                    {{ album.mediaCount }} ITEMS • {{ album.totalSizeFormatted || '0 B' }}
+                    <v-icon icon="mdi-folder-image" size="44" color="grey-darken-1"></v-icon>
                   </div>
                 </div>
 
@@ -207,7 +187,7 @@
                   <div style="max-width: 80%;">
                     <div class="text-subtitle-2 font-weight-bold text-truncate">{{ album.title }}</div>
                     <div class="text-caption text-medium-emphasis text-truncate">
-                      {{ album.description || 'Private Collection' }}
+                      {{ album.mediaCount }} items
                     </div>
                   </div>
                   <v-menu location="bottom end">
@@ -223,7 +203,7 @@
                     </template>
                     <v-list density="compact" bg-color="#0b0f19" class="border">
                       <v-list-item prepend-icon="mdi-pencil-outline" @click.stop="openEditAlbumModal(album)">
-                        <v-list-item-title>Edit Album</v-list-item-title>
+                        <v-list-item-title>Edit Details</v-list-item-title>
                       </v-list-item>
                       <v-list-item prepend-icon="mdi-download" @click.stop="store.downloadAlbum(album.id)">
                         <v-list-item-title>Download (.zip)</v-list-item-title>
@@ -244,9 +224,9 @@
                 style="border-style: dashed !important; border-width: 2px !important;"
                 @click="openNewAlbumModal"
               >
-                <v-icon icon="mdi-plus" size="36" color="primary" class="mb-2"></v-icon>
-                <div class="text-subtitle-2 font-weight-bold">Create Album</div>
-                <div class="text-caption text-medium-emphasis">New private bucket</div>
+                <v-icon icon="mdi-plus" size="32" color="primary" class="mb-2"></v-icon>
+                <div class="text-subtitle-2 font-weight-bold">New Album</div>
+                <div class="text-caption text-medium-emphasis">Create collection</div>
               </div>
             </v-col>
           </v-row>
@@ -419,22 +399,11 @@
                 title="Back to Albums"
               ></v-btn>
               <div>
-                <h1 class="text-h4 font-weight-black mb-1">{{ store.activeAlbum.title }}</h1>
+                <h1 class="text-h5 font-weight-bold mb-1">{{ store.activeAlbum.title }}</h1>
                 <p class="text-caption text-medium-emphasis mb-0">
-                  {{ store.currentMedia.length }} files total •
-                  {{ store.currentMedia.filter(m => !m.isVideo).length }} images •
-                  {{ store.currentMedia.filter(m => m.isVideo).length }} videos
+                  {{ store.currentMedia.length }} items
                 </p>
               </div>
-            </div>
-
-            <div class="d-flex align-center gap-2 mt-3 mt-sm-0">
-              <v-chip size="small" variant="outlined" color="primary" class="font-mono">
-                ROTATION: {{ store.slideshowInterval }}S
-              </v-chip>
-              <v-chip size="small" :color="store.skipVideosInSlideshow ? 'success' : 'grey'" variant="tonal">
-                {{ store.skipVideosInSlideshow ? 'Image-Only Slideshow' : 'Include Videos' }}
-              </v-chip>
             </div>
           </div>
 
@@ -584,9 +553,9 @@
                     </v-menu>
                   </div>
 
-                  <!-- Minimal Badges -->
-                  <div class="minimal-badge" :class="item.isVideo ? 'badge-video' : 'badge-image'">
-                    {{ getFileExtension(item) }}
+                  <!-- Video Indicator -->
+                  <div v-if="item.isVideo" class="video-indicator-badge">
+                    <v-icon icon="mdi-play" size="14"></v-icon>
                   </div>
 
                   <!-- Size Pill on Hover -->
@@ -674,9 +643,9 @@
       @drop.prevent="handleDrop"
     >
       <div class="drag-drop-box glass-panel text-center pa-8 rounded-2xl">
-        <v-icon icon="mdi-cloud-upload" size="72" color="primary" class="mb-3 animate-pulse"></v-icon>
-        <div class="text-h5 font-weight-black mb-1">Drop Files to Vault</div>
-        <div class="text-body-2 text-medium-emphasis">100% Uncompressed Full-Size Originals will be Preserved</div>
+        <v-icon icon="mdi-cloud-upload-outline" size="56" color="primary" class="mb-3 animate-pulse"></v-icon>
+        <div class="text-subtitle-1 font-weight-bold mb-1">Drop to Upload</div>
+        <div class="text-caption text-medium-emphasis">Files will be added to this collection</div>
       </div>
     </div>
   </div>
@@ -1077,6 +1046,21 @@ async function executeDeleteAlbum() {
   border: 3px dashed #3b82f6;
   max-width: 500px;
   animation: pulseGlow 1.5s infinite alternate;
+}
+
+.video-indicator-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  z-index: 5;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(4px);
+  color: #ffffff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @keyframes pulseGlow {

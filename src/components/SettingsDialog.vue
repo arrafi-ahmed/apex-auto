@@ -3,8 +3,8 @@
     <v-card class="glass-panel pa-4 rounded-xl text-white">
       <v-card-title class="font-weight-bold d-flex align-center justify-space-between">
         <div class="d-flex align-center gap-2">
-          <v-icon icon="mdi-cog-outline" color="primary"></v-icon>
-          <span>Vault Preferences</span>
+          <v-icon icon="mdi-tune" color="primary"></v-icon>
+          <span>Preferences</span>
         </div>
         <v-btn icon="mdi-close" variant="text" size="small" @click="store.settingsModalOpen = false"></v-btn>
       </v-card-title>
@@ -12,14 +12,14 @@
       <v-card-text>
         <v-tabs v-model="activeTab" color="primary" density="compact" class="mb-4">
           <v-tab value="slideshow">Slideshow</v-tab>
-          <v-tab value="security">Security &amp; Trigger</v-tab>
+          <v-tab value="security">Access &amp; Security</v-tab>
         </v-tabs>
 
         <v-window v-model="activeTab">
           <!-- Slideshow Config Tab -->
           <v-window-item value="slideshow">
             <div class="mb-4">
-              <label class="text-caption font-weight-bold mb-1 d-block">Default Slide Rotation Speed: {{ form.slideshowInterval }} seconds</label>
+              <label class="text-caption font-weight-bold mb-1 d-block">Slide Interval: {{ form.slideshowInterval }}s</label>
               <v-slider
                 v-model="form.slideshowInterval"
                 :min="1"
@@ -33,40 +33,43 @@
 
             <v-switch
               v-model="form.skipVideosInSlideshow"
-              label="Skip Videos in Slideshow (Only rotate images)"
+              label="Skip videos during slideshow"
               color="primary"
               density="compact"
               class="mb-2"
             ></v-switch>
 
             <p class="text-caption text-medium-emphasis">
-              When enabled, slideshow automatically bypasses video clips. When disabled, slideshow pauses until the video finishes playback before advancing.
+              When enabled, slideshow only rotates through images. When disabled, the slideshow plays each video to completion before advancing.
             </p>
           </v-window-item>
 
           <!-- Security Tab -->
           <v-window-item value="security">
             <div class="mb-4">
-              <label class="text-caption font-weight-bold mb-1 d-block">Secret Decoy Trigger Word</label>
+              <label class="text-caption font-weight-bold mb-1 d-block">Gateway Keyword</label>
               <v-text-field
                 v-model="form.secretTriggerWord"
-                placeholder="e.g. guarantee"
+                :type="showTriggerWord ? 'text' : 'password'"
+                placeholder="••••••••"
                 variant="outlined"
                 density="comfortable"
-                hint="The word in the decoy car transport footer that reveals the login prompt"
+                hint="Discreet gateway activation keyword"
                 persistent-hint
                 color="primary"
+                :append-inner-icon="showTriggerWord ? 'mdi-eye-off' : 'mdi-eye'"
+                @click:append-inner="showTriggerWord = !showTriggerWord"
               ></v-text-field>
             </div>
 
             <div class="mb-4">
-              <label class="text-caption font-weight-bold mb-1 d-block">Inactivity Auto-Lock Duration</label>
+              <label class="text-caption font-weight-bold mb-1 d-block">Inactivity Timeout</label>
               <v-select
                 v-model="form.autoLockMinutes"
                 :items="[
-                  { title: '1 minute (Maximum Security)', value: 1 },
+                  { title: '1 minute', value: 1 },
                   { title: '3 minutes', value: 3 },
-                  { title: '5 minutes (Recommended)', value: 5 },
+                  { title: '5 minutes', value: 5 },
                   { title: '10 minutes', value: 10 },
                   { title: '15 minutes', value: 15 },
                   { title: '30 minutes', value: 30 }
@@ -76,21 +79,21 @@
                 variant="outlined"
                 density="comfortable"
                 color="primary"
-                hint="Automatically returns to decoy car transport page when idle"
+                hint="Automatically returns to home page when idle"
                 persistent-hint
               ></v-select>
             </div>
 
             <v-switch
               v-model="form.tabSwitchLock"
-              label="Lock if browser tab is switched away (> 45s)"
+              label="Lock when browser tab is switched away (> 45s)"
               color="primary"
               density="compact"
               class="mb-3"
             ></v-switch>
 
             <div class="mb-4">
-              <label class="text-caption font-weight-bold mb-1 d-block">Change Master Passphrase</label>
+              <label class="text-caption font-weight-bold mb-1 d-block">Change Passphrase</label>
               <v-text-field
                 v-model="form.newPassword"
                 type="password"
@@ -101,10 +104,8 @@
               ></v-text-field>
             </div>
 
-            <div class="pa-3 bg-surface-variant rounded-lg text-caption">
-              <strong>Emergency Reset Note:</strong><br />
-              If you or an intruder triggers the 503 lockout camouflage, access can be unlocked anytime via URL:
-              <code class="d-block mt-1 font-mono text-primary">/?reset_vault_token=unlock123</code>
+            <div class="pa-3 bg-surface-variant rounded-lg text-caption text-medium-emphasis">
+              <strong>Emergency Recovery:</strong> Server-side administrator unlock parameter enabled.
             </div>
           </v-window-item>
         </v-window>
@@ -128,6 +129,7 @@ import { useVaultStore } from '../stores/vaultStore'
 const store = useVaultStore()
 const activeTab = ref('slideshow')
 const saving = ref(false)
+const showTriggerWord = ref(false)
 
 const form = ref({
   slideshowInterval: 3,
