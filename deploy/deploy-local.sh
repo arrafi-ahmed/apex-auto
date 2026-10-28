@@ -88,14 +88,14 @@ ok "Uploaded deployment package"
 # Step 3: Run server-bootstrap if requested
 if [[ "$RUN_BOOTSTRAP" == true ]]; then
   step "Running server bootstrap on remote server"
-  ssh -t "$SSH_TARGET" "bash $REMOTE_TEMP/server-bootstrap.sh $REMOTE_TEMP/app.env"
+  ssh "$SSH_TARGET" "bash $REMOTE_TEMP/server-bootstrap.sh $REMOTE_TEMP/app.env"
   ok "Server bootstrap completed"
 fi
 
 # Step 4: Run remote deploy
 if [[ "$RUN_DEPLOY" == true ]]; then
   step "Executing remote deployment and application build"
-  ssh -t "$SSH_TARGET" "bash $REMOTE_TEMP/deploy-remote.sh $REMOTE_TEMP/app.env"
+  ssh "$SSH_TARGET" "bash $REMOTE_TEMP/deploy-remote.sh $REMOTE_TEMP/app.env"
   ok "Remote deployment successful!"
   
   printf '\n%s✔ Deployment completed successfully!%s\n' "$GREEN" "$RESET"
