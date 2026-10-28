@@ -66,12 +66,12 @@
             <img
               class="layer full"
               :class="{ 'is-loaded': fullLoaded }"
-              :src="`/media-stream/${currentMedia.id}`"
+              :src="currentSrc"
               :alt="currentMedia.title"
               draggable="false"
               @load="onImageLoad"
             />
-            <div v-if="!fullLoaded" class="spinner" aria-hidden="true"></div>
+            <div v-if="!fullLoaded && showSpinner" class="spinner" aria-hidden="true"></div>
           </template>
           <video
             v-else
@@ -271,6 +271,26 @@ let hudTimer = null
 
 const currentMedia = computed(() => store.activeMediaItem)
 
+const currentSrc = computed(() => {
+  if (!currentMedia.value || currentMedia.value.isVideo) return ''
+  // Deep zoom (> 130%) requests full original raw file for 1:1 pixel inspection
+  if (scale.value > 1.3 || percent.value > 130) {
+    return `/media-stream/${currentMedia.value.id}`
+  }
+  return `/preview/${currentMedia.value.id}`
+})
+
+const showSpinner = ref(false)
+let spinnerTimer = null
+
+function scheduleSpinner() {
+  clearTimeout(spinnerTimer)
+  showSpinner.value = false
+  spinnerTimer = setTimeout(() => {
+    if (!fullLoaded.value) showSpinner.value = true
+  }, 400)
+}
+
 // Scale at which the whole image fits the stage (actual-pixel ratio)
 const fit = computed(() => {
   const n = natural.value.w ? natural.value : { w: currentMedia.value?.width || 0, h: currentMedia.value?.height || 0 }
@@ -336,11 +356,17 @@ function onMouseMoveViewer(e) {
 
 function onImageLoad(e) {
   fullLoaded.value = true
+  clearTimeout(spinnerTimer)
+  showSpinner.value = false
   measureStage()
-  if (e?.target?.naturalWidth && e?.target?.naturalHeight) {
-    natural.value = { w: e.target.naturalWidth, h: e.target.naturalHeight }
-    dimensions.value = `${e.target.naturalWidth} × ${e.target.naturalHeight}`
+  const w = currentMedia.value?.width || e?.target?.naturalWidth
+  const h = currentMedia.value?.height || e?.target?.naturalHeight
+  if (w && h) {
+    natural.value = { w, h }
+    dimensions.value = `${w} × ${h}`
   }
+  // Preload immediate neighbours only AFTER active image has loaded
+  preloadNeighbours()
 }
 
 // ---- Preload neighbours so stepping through feels instant ----
@@ -349,11 +375,11 @@ function preloadNeighbours() {
   const list = store.displayMedia
   if (!list.length) return
   preloaded.length = 0
-  for (const offset of [1, -1, 2]) {
+  for (const offset of [1, -1]) {
     const m = list[(store.viewerActiveIndex + offset + list.length) % list.length]
     if (m && !m.isVideo) {
       const img = new Image()
-      img.src = `/media-stream/${m.id}`
+      img.src = `/preview/${m.id}`
       preloaded.push(img)
     }
   }
@@ -369,18 +395,29 @@ watch(() => store.viewerActiveIndex, () => {
   resetZoom()
   elapsedMs = 0
   progressPercent.value = 0
-  dimensions.value = null
-  natural.value = { w: 0, h: 0 }
   fullLoaded.value = false
-  preloadNeighbours()
+  scheduleSpinner()
+  if (currentMedia.value?.width && currentMedia.value?.height) {
+    natural.value = { w: currentMedia.value.width, h: currentMedia.value.height }
+    dimensions.value = `${currentMedia.value.width} × ${currentMedia.value.height}`
+  } else {
+    dimensions.value = null
+    natural.value = { w: 0, h: 0 }
+  }
   scrollStripToActive()
 })
 
 watch(() => store.viewerOpen, (open) => {
   if (open) {
     fullLoaded.value = false
-    natural.value = { w: 0, h: 0 }
-    preloadNeighbours()
+    scheduleSpinner()
+    if (currentMedia.value?.width && currentMedia.value?.height) {
+      natural.value = { w: currentMedia.value.width, h: currentMedia.value.height }
+      dimensions.value = `${currentMedia.value.width} × ${currentMedia.value.height}`
+    } else {
+      dimensions.value = null
+      natural.value = { w: 0, h: 0 }
+    }
     showHud()
     nextTick(() => {
       measureBars()
@@ -391,6 +428,8 @@ watch(() => store.viewerOpen, (open) => {
   } else {
     stopSlideshowTimer()
     showInfo.value = false
+    clearTimeout(spinnerTimer)
+    showSpinner.value = false
     if (tapTimer) { clearTimeout(tapTimer); tapTimer = null }
     if (hudTimer) { clearTimeout(hudTimer); hudTimer = null }
   }
@@ -875,6 +914,7 @@ onUnmounted(() => {
   stopSlideshowTimer()
   clearTimeout(hudTimer)
   clearTimeout(tapTimer)
+  clearTimeout(spinnerTimer)
 })
 </script>
 
@@ -972,8 +1012,8 @@ onUnmounted(() => {
 .frame.is-dragging { transition: none; }
 .layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .video { pointer-events: auto; background: #000; }
-.placeholder { filter: blur(14px); transform: scale(1.01); transition: opacity 0.25s; }
-.placeholder.is-hidden { opacity: 0; }
+.placeholder { transform: scale(1.002); transition: opacity 0.28s var(--ax-ease); }
+.placeholder.is-hidden { opacity: 0; pointer-events: none; }
 .full { opacity: 0; transition: opacity 0.25s; }
 .full.is-loaded { opacity: 1; }
 .is-fullscreen .layer { object-fit: contain; }

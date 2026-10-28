@@ -27,6 +27,10 @@ export default defineConfig({
         target: apiTarget,
         changeOrigin: true
       },
+      '/preview': {
+        target: apiTarget,
+        changeOrigin: true
+      },
       '/media-stream': {
         target: apiTarget,
         changeOrigin: true

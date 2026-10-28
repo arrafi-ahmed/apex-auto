@@ -232,8 +232,8 @@ function getSafeUploadPath(filename) {
 
 // Helper: Remove thumbnail for media ID
 function removeThumbnail(mediaId) {
-  // -480 is the legacy square crop; -640 is the aspect-preserving thumbnail
-  for (const size of ['480', '640']) {
+  // -480 is the legacy square crop; -640 is thumbnail; -2048 is display preview
+  for (const size of ['480', '640', '2048']) {
     const thumbPath = path.join(THUMBS_DIR, `${mediaId}-${size}.webp`)
     if (fs.existsSync(thumbPath)) {
       try { fs.unlinkSync(thumbPath) } catch (e) { /* ignore */ }
@@ -1008,6 +1008,59 @@ app.get('/thumb/:id', requireAuth, async (req, res) => {
     </svg>`)
   }
   // Fallback to the raw file if sharp could not decode it
+  res.setHeader('Content-Type', item.mimeType || 'image/jpeg')
+  return fs.createReadStream(rawFilePath).pipe(res)
+})
+
+// On-the-fly WebP display previews (2048px max, cached on disk).
+// Delivers lightweight, high-definition preview in the viewer (~150-250KB instead of 2-10MB raw file).
+const previewJobs = new Map()
+
+app.get('/preview/:id', requireAuth, async (req, res) => {
+  const { id } = req.params
+  const db = loadDB()
+  const item = db.media.find(m => m.id === id)
+  if (!item) return res.status(404).send('Not Found')
+
+  let rawFilePath
+  try {
+    rawFilePath = getSafeUploadPath(item.filename)
+  } catch (err) {
+    return res.status(400).send('Invalid path')
+  }
+  if (!fs.existsSync(rawFilePath)) return res.status(404).send('Raw file missing')
+
+  if (item.isVideo) {
+    // For videos, redirect to thumbnail poster
+    return res.redirect(`/thumb/${item.id}`)
+  }
+
+  const previewPath = path.join(THUMBS_DIR, `${item.id}-2048.webp`)
+  const sendPreview = () => {
+    res.setHeader('Content-Type', 'image/webp')
+    res.setHeader('Cache-Control', 'private, max-age=604800, immutable')
+    return fs.createReadStream(previewPath).pipe(res)
+  }
+  if (fs.existsSync(previewPath)) return sendPreview()
+
+  try {
+    if (!previewJobs.has(item.id)) {
+      const job = (async () => {
+        await sharp(rawFilePath)
+          .rotate() // auto-orient by EXIF
+          .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 82, effort: 4 })
+          .toFile(previewPath)
+        return true
+      })().finally(() => previewJobs.delete(item.id))
+      previewJobs.set(item.id, job)
+    }
+    if (await previewJobs.get(item.id)) return sendPreview()
+  } catch (err) {
+    console.error(`Preview generation error for ${item.filename}:`, err.message)
+  }
+
+  // Fallback to raw file if sharp cannot decode
   res.setHeader('Content-Type', item.mimeType || 'image/jpeg')
   return fs.createReadStream(rawFilePath).pipe(res)
 })
