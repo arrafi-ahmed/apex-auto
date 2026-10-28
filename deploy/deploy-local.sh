@@ -76,26 +76,27 @@ fi
 # Step 2: Upload deployment scripts & production .env
 step "Uploading deployment bundle to remote server ($SERVER_IP)"
 REMOTE_TEMP="/root/deploy-$PROJECT_NAME"
-ssh -o ConnectTimeout=10 "$SSH_TARGET" "mkdir -p $REMOTE_TEMP"
+SSH_OPTS="-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
+ssh $SSH_OPTS "$SSH_TARGET" "mkdir -p $REMOTE_TEMP"
 
 # Upload deploy-remote.sh and server-bootstrap.sh
-scp -q "$DEPLOY_DIR/deploy-remote.sh" "$SSH_TARGET:$REMOTE_TEMP/deploy-remote.sh"
-scp -q "$DEPLOY_DIR/server-bootstrap.sh" "$SSH_TARGET:$REMOTE_TEMP/server-bootstrap.sh"
-scp -q "$PROFILE_ENV" "$SSH_TARGET:$REMOTE_TEMP/app.env"
+scp $SSH_OPTS -q "$DEPLOY_DIR/deploy-remote.sh" "$SSH_TARGET:$REMOTE_TEMP/deploy-remote.sh"
+scp $SSH_OPTS -q "$DEPLOY_DIR/server-bootstrap.sh" "$SSH_TARGET:$REMOTE_TEMP/server-bootstrap.sh"
+scp $SSH_OPTS -q "$PROFILE_ENV" "$SSH_TARGET:$REMOTE_TEMP/app.env"
 
 ok "Uploaded deployment package"
 
 # Step 3: Run server-bootstrap if requested
 if [[ "$RUN_BOOTSTRAP" == true ]]; then
   step "Running server bootstrap on remote server"
-  ssh "$SSH_TARGET" "bash $REMOTE_TEMP/server-bootstrap.sh $REMOTE_TEMP/app.env"
+  ssh $SSH_OPTS "$SSH_TARGET" "bash $REMOTE_TEMP/server-bootstrap.sh $REMOTE_TEMP/app.env"
   ok "Server bootstrap completed"
 fi
 
 # Step 4: Run remote deploy
 if [[ "$RUN_DEPLOY" == true ]]; then
   step "Executing remote deployment and application build"
-  ssh "$SSH_TARGET" "bash $REMOTE_TEMP/deploy-remote.sh $REMOTE_TEMP/app.env"
+  ssh $SSH_OPTS "$SSH_TARGET" "bash $REMOTE_TEMP/deploy-remote.sh $REMOTE_TEMP/app.env"
   ok "Remote deployment successful!"
   
   printf '\n%s✔ Deployment completed successfully!%s\n' "$GREEN" "$RESET"
