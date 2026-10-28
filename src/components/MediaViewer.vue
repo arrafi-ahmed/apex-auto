@@ -297,7 +297,11 @@ function onMouseMoveViewer() {
   if (hudTimer) clearTimeout(hudTimer)
   const idleMs = isFullscreen.value ? 1500 : 2500
   hudTimer = setTimeout(() => {
-    if (!isPanning.value && !showHelp.value) hudVisible.value = false
+    const hasActiveOverlay = !!document.querySelector('.v-overlay--active')
+    const isEditingZoom = zoomDraft.value !== null
+    if (!isPanning.value && !showHelp.value && !hasActiveOverlay && !isEditingZoom) {
+      hudVisible.value = false
+    }
   }, idleMs)
 }
 
@@ -710,7 +714,11 @@ function handleFullscreenChange() {
   if (isFullscreen.value) {
     if (hudTimer) clearTimeout(hudTimer)
     hudTimer = setTimeout(() => {
-      if (!isPanning.value && !showHelp.value) hudVisible.value = false
+      const hasActiveOverlay = !!document.querySelector('.v-overlay--active')
+      const isEditingZoom = zoomDraft.value !== null
+      if (!isPanning.value && !showHelp.value && !hasActiveOverlay && !isEditingZoom) {
+        hudVisible.value = false
+      }
     }, 1500)
   } else {
     hudVisible.value = true

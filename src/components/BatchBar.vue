@@ -4,10 +4,10 @@
       <div v-if="store.selectedCount > 0" class="dock" role="toolbar" aria-label="Selection actions">
         <span class="dock-count"><b class="tabular">{{ store.selectedCount }}</b> selected</span>
         <span class="dock-sep"></span>
-        <button class="dock-btn" @click="showMoveModal = true"><v-icon icon="mdi-folder-move-outline"></v-icon>Move</button>
-        <button class="dock-btn" @click="showCopyModal = true"><v-icon icon="mdi-content-copy"></v-icon>Copy</button>
-        <button class="dock-btn" @click="store.batchDownload"><v-icon icon="mdi-download-outline"></v-icon>Download</button>
-        <button class="dock-btn is-danger" @click="store.batchDelete"><v-icon icon="mdi-delete-outline"></v-icon>Delete</button>
+        <button class="dock-btn" title="Move to album" aria-label="Move" @click="showMoveModal = true"><v-icon icon="mdi-folder-move-outline"></v-icon>Move</button>
+        <button class="dock-btn" title="Copy to album" aria-label="Copy" @click="showCopyModal = true"><v-icon icon="mdi-content-copy"></v-icon>Copy</button>
+        <button class="dock-btn" title="Download .zip" aria-label="Download" @click="store.batchDownload"><v-icon icon="mdi-download-outline"></v-icon>Download</button>
+        <button class="dock-btn is-danger" title="Delete permanently" aria-label="Delete" @click="store.batchDelete"><v-icon icon="mdi-delete-outline"></v-icon>Delete</button>
         <span class="dock-sep"></span>
         <button class="ax-icon-btn" title="Clear selection" @click="store.clearSelection"><v-icon icon="mdi-close" size="17"></v-icon></button>
       </div>

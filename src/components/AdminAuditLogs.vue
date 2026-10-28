@@ -35,7 +35,7 @@
           <div><div class="big tabular">{{ store.totalLogins }}</div><div class="sub">Authorized</div></div>
           <div><div class="big tabular" :class="{ bad: store.failedAttempts > 0 }">{{ store.failedAttempts }}</div><div class="sub">Blocked</div></div>
         </div>
-        <footer>{{ store.failedAttempts > 0 ? 'Invalid attempts were met with the 503 page.' : 'No unauthorized attempts recorded.' }}</footer>
+        <footer>{{ store.failedAttempts > 0 ? 'Failed attempts recorded. Locked out after 3 failures in 1 min.' : 'No unauthorized attempts recorded.' }}</footer>
       </section>
     </div>
 

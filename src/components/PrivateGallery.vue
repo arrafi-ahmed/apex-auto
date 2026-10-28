@@ -221,7 +221,7 @@
               <h3 v-if="b.type === 'h'" class="jgroup" :style="{ top: `${b.top}px`, height: `${b.height}px` }">
                 {{ b.label }}<span class="seg-n">{{ b.count }}</span>
               </h3>
-              <div v-else class="jrow" role="row" :style="{ top: `${b.top}px`, height: `${b.height}px` }">
+              <div v-else class="jrow" role="row" :style="{ top: `${b.top}px`, height: `${b.height}px`, gap: `${gapSize}px` }">
                 <div
                   v-for="t in b.items"
                   :key="t.item.id"
@@ -237,7 +237,7 @@
                   @keydown="onTileKeydown($event, t)"
                   @focus="focusIndex = t.index"
                 >
-                  <img :src="`/thumb/${t.item.id}`" :alt="t.item.title" loading="lazy" draggable="false" />
+                  <img :src="`/thumb/${t.item.id}`" :alt="t.item.title" loading="lazy" decoding="async" draggable="false" />
                   <span v-if="t.item.isVideo" class="tile-play"><v-icon icon="mdi-play" size="22"></v-icon></span>
 
                   <button class="tile-check" tabindex="-1" :aria-pressed="isSelected(t.item.id)" title="Select" @click.stop="handleCheckClick(t.item.id, t.index, $event)">
@@ -372,7 +372,7 @@ watch(() => [store.mediaFilter, store.mediaSort], ([filter, sort]) => {
 })
 
 // ───────────── Justified grid (rows keep each photo's aspect ratio) + windowing ─────────────
-const GAP = 6
+// ───────────── Justified grid (rows keep each photo's aspect ratio) + windowing ─────────────
 const HEADER_H = 44
 const gridRef = ref(null)
 const gridWidth = ref(0)
@@ -380,7 +380,19 @@ const viewTop = ref(0)
 const viewBottom = ref(1200)
 let lastScrollY = 0
 
-const targetRowH = computed(() => (gridWidth.value < 520 ? 120 : gridWidth.value < 900 ? 170 : 210))
+// Adaptive gap: 4px on compact mobile screens, 6px on tablet & desktop
+const gapSize = computed(() => (gridWidth.value < 520 ? 4 : 6))
+
+// Dynamic row height tailored for optimal readability across all viewports
+const targetRowH = computed(() => {
+  const w = gridWidth.value
+  if (w < 440) return 145       // Compact mobile: 145px ensures 2-3 legible columns, never squished slivers
+  if (w < 600) return 165       // Large mobile / phablet
+  if (w < 900) return 185       // Tablet
+  if (w < 1440) return 220      // Standard desktop
+  return 250                    // Ultrawide / 4K monitors
+})
+
 const groupByDate = computed(() => store.mediaSort === 'newest' || store.mediaSort === 'oldest')
 
 function ratioOf(m) {
@@ -400,6 +412,7 @@ const layout = computed(() => {
 
   const rows = []
   const rowH = targetRowH.value
+  const gap = gapSize.value
   let y = 0
 
   // Split into date groups (or a single group)
@@ -411,6 +424,9 @@ const layout = computed(() => {
     else groups.push({ label, items: [{ item, index }] })
   })
 
+  // Prevent portrait images on mobile from being squished into tiny unusable slivers
+  const maxRowItems = width < 360 ? 2 : width < 480 ? 3 : width < 768 ? 5 : 8
+
   for (const group of groups) {
     if (groupByDate.value) {
       blocks.push({ key: `h-${group.label}-${y}`, type: 'h', top: y, height: HEADER_H, label: group.label, count: group.items.length })
@@ -418,32 +434,55 @@ const layout = computed(() => {
     }
     let row = []
     let ratioSum = 0
+
     const flush = (full) => {
       if (!row.length) return
-      const gaps = GAP * (row.length - 1)
+      const gaps = gap * (row.length - 1)
       const height = full ? Math.min((width - gaps) / ratioSum, rowH * 1.6) : rowH
-      const items = row.map(r => ({ ...r, w: Math.floor(ratioOf(r.item) * height) }))
+
+      // Calculate initial item widths
+      const items = row.map(r => ({
+        ...r,
+        w: Math.round(ratioOf(r.item) * height)
+      }))
+
+      // Pixel-perfect edge justification: distribute remainder to fill container width exactly
+      if (full && items.length > 0) {
+        const totalW = items.reduce((acc, it) => acc + it.w, 0) + gaps
+        const remainder = width - totalW
+        if (remainder !== 0) {
+          items[items.length - 1].w += remainder
+        }
+      }
+
       const block = { key: `r-${items[0].item.id}`, type: 'r', top: y, height: Math.round(height), items }
       blocks.push(block)
       rows.push(block)
-      y += Math.round(height) + GAP
+      y += Math.round(height) + gap
       row = []
       ratioSum = 0
     }
+
     for (const entry of group.items) {
       row.push(entry)
       ratioSum += ratioOf(entry.item)
-      if (ratioSum * rowH + GAP * (row.length - 1) >= width) flush(true)
+
+      // Break row if target width is reached OR if mobile max-item limit is reached
+      const fitsWidth = (ratioSum * rowH + gap * (row.length - 1)) >= width
+      const reachesMax = row.length >= maxRowItems
+      if (fitsWidth || (reachesMax && ratioSum * rowH >= width * 0.75)) {
+        flush(true)
+      }
     }
     flush(false)
     if (groupByDate.value) y += 8
   }
-  return { blocks, height: Math.max(0, y - GAP), rows }
+  return { blocks, height: Math.max(0, y - gap), rows }
 })
 
 const visibleBlocks = computed(() => {
-  const lo = viewTop.value - 700
-  const hi = viewBottom.value + 700
+  const lo = viewTop.value - 1000
+  const hi = viewBottom.value + 1000
   return layout.value.blocks.filter(b => b.top + b.height >= lo && b.top <= hi)
 })
 
@@ -544,14 +583,15 @@ function neighbourIndex(index, key) {
   const target = rows[key === 'ArrowDown' ? r + 1 : r - 1]
   if (!target) return index
   const here = rows[r].items.find(t => t.index === index)
-  const x = rows[r].items.slice(0, rows[r].items.indexOf(here)).reduce((a, t) => a + t.w + GAP, 0) + here.w / 2
+  const gap = gapSize.value
+  const x = rows[r].items.slice(0, rows[r].items.indexOf(here)).reduce((a, t) => a + t.w + gap, 0) + here.w / 2
   let acc = 0
   let best = target.items[0]
   let bestDist = Infinity
   for (const t of target.items) {
     const dist = Math.abs(acc + t.w / 2 - x)
     if (dist < bestDist) { best = t; bestDist = dist }
-    acc += t.w + GAP
+    acc += t.w + gap
   }
   return best.index
 }
@@ -607,10 +647,10 @@ function onEscape(e) {
 
 // ───────────── Formatting helpers ─────────────
 function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B'
+  if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 B'
   const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.min(sizes.length - 1, Math.max(0, Math.floor(Math.log(bytes) / Math.log(k))))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
@@ -824,8 +864,7 @@ onUnmounted(() => {
 .tile.is-selected .tile-check { opacity: 1; background: var(--ax-accent); border-color: var(--ax-accent); color: #fff; }
 .tile-more { z-index: 2; }
 .tile-badge { left: 8px; bottom: 8px; z-index: 2; font-size: 11px; }
-.tile-fav { position: absolute; z-index: 2; right: 8px; top: 8px; color: #fbbf24; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7)); }
-.tile:hover .tile-more ~ .tile-fav { right: 42px; }
+.tile-fav { position: absolute; z-index: 2; right: 38px; top: 9px; color: #fbbf24; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7)); pointer-events: none; }
 .tile-size { position: absolute; z-index: 1; right: 8px; bottom: 8px; font-size: 11px; color: rgba(255, 255, 255, 0.9); opacity: 0; transition: opacity var(--ax-fast); }
 .tile:hover .tile-size { opacity: 1; }
 .no-match { margin: 56px 0; text-align: center; color: var(--ax-text-2); font-size: 14px; }
@@ -854,18 +893,34 @@ onUnmounted(() => {
 .drop-card strong { font-size: 16px; color: var(--ax-text); }
 .drop-card span:last-child { font-size: 13px; color: var(--ax-text-2); }
 
-/* Touch screens have no hover: keep the select/options controls visible */
+/* Touch screens have no hover: keep the select/options controls visible with comfortable tap targets */
 @media (hover: none) {
   .tile-check, .tile-more, .album-more { opacity: 1; }
-  .tile-check { width: 26px; height: 26px; }
-  .tile-more, .album-more { width: 32px; height: 32px; }
+  .tile-check { width: 30px; height: 30px; border-radius: 9px; }
+  .tile-more, .album-more { width: 32px; height: 32px; border-radius: 9px; }
   .tile-size { display: none; }
-  .tile::after { opacity: 0.6; }
+  .tile::after { opacity: 0.55; }
+}
+
+@media (max-width: 560px) {
+  .album-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px 12px;
+  }
+  .album-cover { border-radius: 12px; }
+  .album-title { font-size: 13.5px; }
+  .album-sub { font-size: 11.5px; }
 }
 
 @media (max-width: 640px) {
-  .topbar-inner, .page { padding-left: 16px; padding-right: 16px; }
-  .page-title { font-size: 21px; }
+  .topbar-inner, .page { padding-left: 14px; padding-right: 14px; }
+  .page-head { gap: 12px; margin-bottom: 20px; }
+  .page-title { font-size: 20px; }
+  .page-tools { width: 100%; display: flex; gap: 8px; }
+  .page-tools > * { flex: 1; justify-content: center; }
+  .filters { gap: 10px; margin-bottom: 16px; }
+  .filters .ax-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .filters .ax-seg::-webkit-scrollbar { display: none; }
   .filters-right, .filters-right .ax-search, .filters-right .sort { width: 100%; }
 }
 </style>
