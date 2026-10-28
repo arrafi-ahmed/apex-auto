@@ -166,6 +166,7 @@ export const useVaultStore = defineStore('vault', {
         }
         if (res.ok) {
           const data = await res.json()
+          this.isLockedOut = false
           this.isAuthenticated = data.authenticated
           if (this.isAuthenticated) {
             await Promise.all([
@@ -192,13 +193,14 @@ export const useVaultStore = defineStore('vault', {
           // Lockout triggered by server
           this.isLockedOut = true
           this.authModalOpen = false
-          return false
+          return { success: false, lockedOut: true }
         }
 
         if (res.ok) {
           const data = await res.json()
           this.isAuthenticated = true
           this.authModalOpen = false
+          this.isLockedOut = false
           if (data.lastLogin) {
             this.lastLoginTime = data.lastLogin
           }
@@ -214,18 +216,26 @@ export const useVaultStore = defineStore('vault', {
             this.fetchAlbums(),
             this.fetchAuditLogs()
           ])
-          return true
+          return { success: true }
+        } else if (res.status === 401) {
+          const data = await res.json().catch(() => ({}))
+          return {
+            success: false,
+            lockedOut: false,
+            error: data.error || 'Incorrect passphrase',
+            remainingAttempts: data.remainingAttempts
+          }
         } else {
           // Fallback lockout on invalid status
           this.isLockedOut = true
           this.authModalOpen = false
-          return false
+          return { success: false, lockedOut: true }
         }
       } catch (err) {
         // Network or 503 lockout error
         this.isLockedOut = true
         this.authModalOpen = false
-        return false
+        return { success: false, lockedOut: true }
       }
     },
 

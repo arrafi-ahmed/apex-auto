@@ -57,10 +57,11 @@ app.disable('x-powered-by')
 const activeSessions = new Map()
 const SESSION_MAX_IDLE_MS = 60 * 60 * 1000 // 60-minute sliding idle window
 
-// In-memory lockout tracking: Map<ip, { failedAttempts, lockedUntil, permanent }>
+// In-memory lockout tracking: Map<ip, { attempts, lockedUntil, permanent }>
 const lockedClients = new Map()
-const MAX_FAILED_ATTEMPTS = 5
-const LOCKOUT_DURATION_MS = 30 * 60 * 1000 // 30 minutes lockout
+const MAX_FAILED_ATTEMPTS = 3
+const ATTEMPT_WINDOW_MS = 60 * 1000 // 1-minute session window for failed attempts
+const LOCKOUT_DURATION_MS = (Number(process.env.LOCKOUT_DURATION_MINUTES) || 1) * 60 * 1000 // Locked out for at least 1 min session
 
 // Periodic Session & Lockout Sweeper (Runs every 60 seconds)
 setInterval(() => {
@@ -71,8 +72,13 @@ setInterval(() => {
     }
   }
   for (const [ip, lock] of lockedClients.entries()) {
-    if (!lock.permanent && lock.lockedUntil && now > lock.lockedUntil) {
+    if (!lock.permanent && lock.lockedUntil && now >= lock.lockedUntil) {
       lockedClients.delete(ip)
+    } else if (!lock.lockedUntil) {
+      lock.attempts = (lock.attempts || []).filter(t => (now - t) < ATTEMPT_WINDOW_MS)
+      if (lock.attempts.length === 0) {
+        lockedClients.delete(ip)
+      }
     }
   }
 }, 60 * 1000)
@@ -80,8 +86,8 @@ setInterval(() => {
 // Seed demo data if database is fresh
 seedInitialData()
 
-// Daily car-news digest for the public landing page
-startNewsScheduler()
+// Daily car-news digest for the public landing page (NEWS_DISABLED=1 turns the fetcher off, e.g. in tests)
+if (!process.env.NEWS_DISABLED) startNewsScheduler()
 
 app.use(cors({
   origin: true,
@@ -163,8 +169,8 @@ app.use((req, res, next) => {
 
   // If locked, return genuine 503
   const lock = lockedClients.get(clientIp)
-  if (lock) {
-    if (lock.permanent || !lock.lockedUntil || Date.now() < lock.lockedUntil) {
+  if (lock && lock.lockedUntil) {
+    if (lock.permanent || Date.now() < lock.lockedUntil) {
       return sendCamouflage503(res)
     } else {
       lockedClients.delete(clientIp)
@@ -397,8 +403,12 @@ function parseUserAgent(uaString = '') {
 app.get('/api/auth/status', (req, res) => {
   const clientIp = getClientIp(req)
   const lock = lockedClients.get(clientIp)
-  if (lock && (lock.permanent || !lock.lockedUntil || Date.now() < lock.lockedUntil)) {
-    return sendCamouflage503(res)
+  if (lock && lock.lockedUntil) {
+    if (lock.permanent || Date.now() < lock.lockedUntil) {
+      return sendCamouflage503(res)
+    } else {
+      lockedClients.delete(clientIp)
+    }
   }
   res.json({
     authenticated: isAuthenticated(req)
@@ -408,6 +418,15 @@ app.get('/api/auth/status', (req, res) => {
 // Login endpoint with timing-safe comparison, audit logging, and lockout escalation
 app.post('/api/auth/login', (req, res) => {
   const clientIp = getClientIp(req)
+  const lock = lockedClients.get(clientIp)
+  if (lock && lock.lockedUntil) {
+    if (lock.permanent || Date.now() < lock.lockedUntil) {
+      return sendCamouflage503(res)
+    } else {
+      lockedClients.delete(clientIp)
+    }
+  }
+
   const { password } = req.body
   const db = loadDB()
   const uaInfo = parseUserAgent(req.headers['user-agent'])
@@ -456,13 +475,27 @@ app.post('/api/auth/login', (req, res) => {
       settings: publicSettings(db.settings)
     })
   } else {
-    // WRONG PASSWORD -> ENGAGE CAMOUFLAGE LOCKOUT & RECORD AUDIT LOG
-    console.warn(`[SECURITY] Intruder / Wrong password attempt from IP: ${clientIp}. Engaging camouflage mode.`)
-    const current = lockedClients.get(clientIp) || { failedAttempts: 0, lockedUntil: null, permanent: true }
-    current.failedAttempts += 1
-    current.lockedUntil = Date.now() + LOCKOUT_DURATION_MS
-    current.permanent = true // Hard lockout until reset or 30 min expiration
-    lockedClients.set(clientIp, current)
+    // WRONG PASSWORD -> FAILED ATTEMPTS IN 1 MIN SESSION
+    const now = Date.now()
+    const record = lockedClients.get(clientIp) || { attempts: [], lockedUntil: null, permanent: false }
+
+    // Prune attempts older than ATTEMPT_WINDOW_MS (1 min session)
+    record.attempts = (record.attempts || []).filter(t => (now - t) < ATTEMPT_WINDOW_MS)
+    record.attempts.push(now)
+
+    const count = record.attempts.length
+    const isLockedOut = count >= MAX_FAILED_ATTEMPTS
+
+    if (isLockedOut) {
+      record.lockedUntil = now + LOCKOUT_DURATION_MS
+      record.permanent = false
+      record.attempts = []
+      lockedClients.set(clientIp, record)
+      console.warn(`[SECURITY] Intruder / ${count} failed password attempts reached from IP: ${clientIp}. Engaging camouflage mode for ${LOCKOUT_DURATION_MS / 1000}s.`)
+    } else {
+      lockedClients.set(clientIp, record)
+      console.warn(`[SECURITY] Failed password attempt (${count}/${MAX_FAILED_ATTEMPTS}) from IP: ${clientIp}.`)
+    }
 
     // Record failed attempt in audit log
     const logEntry = {
@@ -470,6 +503,7 @@ app.post('/api/auth/login', (req, res) => {
       timestamp: new Date().toISOString(),
       ip: clientIp,
       status: 'failed',
+      note: isLockedOut ? `Camouflage 503 lockout engaged (${MAX_FAILED_ATTEMPTS} failed attempts)` : `Failed attempt ${count} of ${MAX_FAILED_ATTEMPTS}`,
       os: uaInfo.os,
       deviceType: uaInfo.deviceType,
       browser: uaInfo.browser,
@@ -481,7 +515,14 @@ app.post('/api/auth/login', (req, res) => {
     if (db.auditLogs.length > 500) db.auditLogs.pop()
     saveDB(db)
 
-    return sendCamouflage503(res)
+    if (isLockedOut) {
+      return sendCamouflage503(res)
+    } else {
+      return res.status(401).json({
+        error: 'Invalid passphrase',
+        remainingAttempts: MAX_FAILED_ATTEMPTS - count
+      })
+    }
   }
 })
 

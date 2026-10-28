@@ -10,7 +10,29 @@
 </template>
 
 <script setup>
+import { onMounted, onUnmounted } from 'vue'
+import { useVaultStore } from '../stores/vaultStore'
+
 // Pure camouflage mode - no secret triggers, no links, strictly realistic server error
+const store = useVaultStore()
+let pollTimer = null
+
+onMounted(() => {
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch('/api/auth/status')
+      if (res.status === 200) {
+        store.checkStatus()
+      }
+    } catch {
+      // Still 503 or network issue
+    }
+  }, 5000)
+})
+
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
 </script>
 
 <style scoped>
