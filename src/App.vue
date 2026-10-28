@@ -20,7 +20,7 @@
 
     <!-- Global toast (optional action button, e.g. Undo) -->
     <transition name="toast">
-      <div v-if="toastVisible" class="toast" :class="`is-${store.noticeColor}`" role="status" aria-live="polite">
+      <div v-if="toastVisible" class="toast" :class="[`is-${store.noticeColor}`, { 'is-raised': store.selectedCount > 0 }]" role="status" aria-live="polite">
         <v-icon
           :icon="store.noticeColor === 'success' ? 'mdi-check-circle-outline' : store.noticeColor === 'error' ? 'mdi-alert-circle-outline' : 'mdi-information-outline'"
           size="17"
@@ -172,7 +172,7 @@ onUnmounted(() => {
   position: fixed;
   z-index: 100000;
   left: 50%;
-  bottom: 24px;
+  bottom: calc(24px + var(--ax-safe-bottom));
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -185,11 +185,15 @@ onUnmounted(() => {
   box-shadow: var(--ax-shadow-lg);
   font-size: 13.5px;
   color: var(--ax-text);
+  transition: bottom 0.22s var(--ax-ease), opacity 0.22s var(--ax-ease), transform 0.22s var(--ax-ease);
+}
+.toast.is-raised {
+  bottom: calc(88px + var(--ax-safe-bottom));
 }
 .toast .v-icon { color: var(--ax-text-2); }
 .toast.is-success .v-icon { color: rgb(var(--v-theme-success)); }
 .toast.is-error .v-icon { color: var(--ax-danger); }
-.toast-msg { padding-right: 4px; }
+.toast-msg { padding-right: 4px; flex: 1; min-width: 0; line-height: 1.4; }
 .toast-action {
   height: 28px;
   padding: 0 12px;
@@ -199,6 +203,7 @@ onUnmounted(() => {
   color: var(--ax-accent);
   font: 600 13px/1 var(--font-sans);
   cursor: pointer;
+  white-space: nowrap;
 }
 .toast-action:hover { background: var(--ax-accent-ring); color: #fff; }
 .toast-close {
@@ -215,4 +220,20 @@ onUnmounted(() => {
 .toast-close:hover { background: rgba(var(--v-theme-on-surface), 0.08); color: var(--ax-text); }
 .toast-enter-active, .toast-leave-active { transition: opacity 0.22s var(--ax-ease), transform 0.22s var(--ax-ease); }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translate(-50%, 10px); }
+
+@media (max-width: 600px) {
+  .toast {
+    left: 12px;
+    right: 12px;
+    transform: none;
+    max-width: none;
+    bottom: calc(12px + var(--ax-safe-bottom));
+  }
+  .toast.is-raised {
+    bottom: calc(76px + var(--ax-safe-bottom));
+  }
+  .toast-enter-from, .toast-leave-to {
+    transform: translateY(10px);
+  }
+}
 </style>

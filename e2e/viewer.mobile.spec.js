@@ -34,6 +34,9 @@ test.describe('viewer on a phone', () => {
     await openViewerOn(page, 'wide.jpg')
     const fit = await zoomValue(page)
 
+    // Taps are swallowed while the open transition runs; wait until it has finished
+    await expect(page.locator('html')).not.toHaveAttribute('data-vt', 'running')
+
     await page.touchscreen.tap(190, 400)
     await page.touchscreen.tap(191, 400)
     await expect.poll(() => zoomValue(page)).toBeGreaterThan(fit * 1.5)

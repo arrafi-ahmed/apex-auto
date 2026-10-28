@@ -1,43 +1,43 @@
 <template>
+  <v-theme-provider v-if="store.viewerOpen" theme="apexDark" class="viewer-theme">
   <div
-    v-if="store.viewerOpen"
     ref="viewerRef"
     class="viewer"
-    :class="{ 'is-fullscreen': isFullscreen, 'cursor-hidden': isFullscreen && !hudVisible }"
-    :style="{ '--veil': veil, '--bar-top': hudVisible && !isFullscreen ? `${barTop}px` : '0px', '--bar-bottom': hudVisible && !isFullscreen ? `${barBottom}px` : '0px' }"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Media viewer"
-    tabindex="0"
-    @keydown="handleKeydown"
-    @mousemove="onMouseMoveViewer"
-  >
-    <div v-if="store.slideshowPlaying && !isFullscreen" class="progress" :style="{ width: `${progressPercent}%` }"></div>
+      :class="{ 'is-fullscreen': isFullscreen, 'cursor-hidden': isFullscreen && !hudVisible }"
+      :style="{ '--veil': veil, '--bar-top-h': `${barTop}px`, '--bar-top': hudVisible && !isFullscreen ? `${barTop}px` : '0px', '--bar-bottom': hudVisible && !isFullscreen ? `${barBottom}px` : '0px' }"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Media viewer"
+      tabindex="0"
+      @keydown="handleKeydown"
+      @mousemove="onMouseMoveViewer"
+    >
+      <div v-if="store.slideshowPlaying && !isFullscreen" class="progress" :style="{ width: `${progressPercent}%` }"></div>
 
-    <!-- Top bar -->
-    <div ref="topBarRef" class="bar top" :class="{ 'is-hidden': !hudVisible }">
-      <div class="meta">
-        <span class="name text-truncate">{{ currentMedia?.title || currentMedia?.originalName }}</span>
-        <span class="count font-mono tabular">{{ store.viewerActiveIndex + 1 }} / {{ store.displayMedia.length }}</span>
-        <span v-if="dimensions" class="count font-mono d-none d-md-inline">{{ dimensions }}</span>
+      <!-- Top bar -->
+      <div ref="topBarRef" class="bar top" :class="{ 'is-hidden': !hudVisible }">
+        <div class="meta">
+          <span class="name text-truncate">{{ currentMedia?.title || currentMedia?.originalName }}</span>
+          <span class="count font-mono tabular">{{ store.viewerActiveIndex + 1 }} / {{ store.displayMedia.length }}</span>
+          <span v-if="dimensions" class="count font-mono d-none d-md-inline">{{ dimensions }}</span>
+        </div>
+        <div class="tools">
+          <button class="ax-icon-btn" :class="{ 'is-active': currentMedia?.favorite }" :title="currentMedia?.favorite ? 'Remove favourite (S)' : 'Favourite (S)'" @click="toggleFavorite">
+            <v-icon :icon="currentMedia?.favorite ? 'mdi-star' : 'mdi-star-outline'" size="18"></v-icon>
+          </button>
+          <button class="ax-icon-btn" :class="{ 'is-active': showInfo }" title="Details (I)" @click="showInfo = !showInfo"><v-icon icon="mdi-information-outline" size="18"></v-icon></button>
+          <a class="ax-icon-btn" :href="`/media-stream/${currentMedia?.id}`" :download="currentMedia?.originalName || 'media'" title="Download (D)">
+            <v-icon icon="mdi-download-outline" size="18"></v-icon>
+          </a>
+          <button class="ax-icon-btn is-danger" title="Delete (Del)" @click="deleteCurrent"><v-icon icon="mdi-delete-outline" size="18"></v-icon></button>
+          <span class="tools-sep"></span>
+          <button class="ax-icon-btn d-none d-sm-grid" title="Shortcuts (?)" @click="showHelp = !showHelp"><v-icon icon="mdi-keyboard-outline" size="18"></v-icon></button>
+          <button class="ax-icon-btn fs-btn" :title="isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'" @click="toggleFullscreen">
+            <v-icon :icon="isFullscreen ? 'mdi-fullscreen-exit' : 'mdi-fullscreen'" size="18"></v-icon>
+          </button>
+          <button class="ax-icon-btn" title="Close (Esc)" @click="closeWithTransition"><v-icon icon="mdi-close" size="18"></v-icon></button>
+        </div>
       </div>
-      <div class="tools">
-        <button class="ax-icon-btn" :class="{ 'is-active': currentMedia?.favorite }" :title="currentMedia?.favorite ? 'Remove favourite (S)' : 'Favourite (S)'" @click="toggleFavorite">
-          <v-icon :icon="currentMedia?.favorite ? 'mdi-star' : 'mdi-star-outline'" size="18"></v-icon>
-        </button>
-        <button class="ax-icon-btn" :class="{ 'is-active': showInfo }" title="Details (I)" @click="showInfo = !showInfo"><v-icon icon="mdi-information-outline" size="18"></v-icon></button>
-        <a class="ax-icon-btn" :href="`/media-stream/${currentMedia?.id}`" :download="currentMedia?.originalName || 'media'" title="Download (D)">
-          <v-icon icon="mdi-download-outline" size="18"></v-icon>
-        </a>
-        <button class="ax-icon-btn is-danger" title="Delete (Del)" @click="deleteCurrent"><v-icon icon="mdi-delete-outline" size="18"></v-icon></button>
-        <span class="tools-sep"></span>
-        <button class="ax-icon-btn d-none d-sm-grid" title="Shortcuts (?)" @click="showHelp = !showHelp"><v-icon icon="mdi-keyboard-outline" size="18"></v-icon></button>
-        <button class="ax-icon-btn" :title="isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'" @click="toggleFullscreen">
-          <v-icon :icon="isFullscreen ? 'mdi-fullscreen-exit' : 'mdi-fullscreen'" size="18"></v-icon>
-        </button>
-        <button class="ax-icon-btn" title="Close (Esc)" @click="close"><v-icon icon="mdi-close" size="18"></v-icon></button>
-      </div>
-    </div>
 
     <!-- Stage -->
     <div
@@ -87,7 +87,7 @@
     </div>
 
     <button class="arrow left" :class="{ 'is-hidden': !hudVisible }" title="Previous (←)" @click="prev"><v-icon icon="mdi-chevron-left" size="22"></v-icon></button>
-    <button class="arrow right" :class="{ 'is-hidden': !hudVisible }" title="Next (→)" @click="next"><v-icon icon="mdi-chevron-right" size="22"></v-icon></button>
+    <button class="arrow right" :class="{ 'is-hidden': !hudVisible, 'has-info': showInfo }" title="Next (→)" @click="next"><v-icon icon="mdi-chevron-right" size="22"></v-icon></button>
 
     <!-- Details drawer -->
     <transition name="drawer">
@@ -155,7 +155,7 @@
             </v-menu>
           </div>
           <button class="ax-icon-btn" :disabled="percent >= PRESETS[PRESETS.length - 1]" title="Zoom in" @click="zoomIn"><v-icon icon="mdi-plus" size="18"></v-icon></button>
-          <button class="ax-icon-btn" title="Fit to page" @click="resetZoom"><v-icon icon="mdi-fit-to-screen-outline" size="18"></v-icon></button>
+          <button class="ax-icon-btn zoom-fit" title="Fit to page" @click="resetZoom"><v-icon icon="mdi-fit-to-screen-outline" size="18"></v-icon></button>
         </div>
 
         <div class="group center">
@@ -209,11 +209,13 @@
       </div>
     </v-dialog>
   </div>
+  </v-theme-provider>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useVaultStore } from '../stores/vaultStore'
+import { reduceMotion, viewerMediaEl, trackTransition } from '../viewTransition'
 
 const store = useVaultStore()
 const viewerRef = ref(null)
@@ -221,8 +223,8 @@ const stageRef = ref(null)
 const stripRef = ref(null)
 const topBarRef = ref(null)
 const bottomBarRef = ref(null)
-const barTop = ref(0)
-const barBottom = ref(0)
+const barTop = ref(56)
+const barBottom = ref(84)
 const zoomDraft = ref(null)
 const videoPlayerRef = ref(null)
 
@@ -352,7 +354,9 @@ watch(() => store.viewerOpen, (open) => {
     fullLoaded.value = false
     natural.value = { w: 0, h: 0 }
     preloadNeighbours()
+    onMouseMoveViewer()
     nextTick(() => {
+      measureBars()
       measureStage()
       viewerRef.value?.focus()
       stripRef.value?.querySelector('.strip-item.is-active')?.scrollIntoView({ inline: 'center', block: 'nearest' })
@@ -664,7 +668,7 @@ function onPointerUp(e) {
   } else if (g === 'swipe-y') {
     const dy = dragY.value
     dragY.value = 0
-    if (dy > 110) close()
+    if (dy > 110) closeWithTransition()
   } else if (g === 'pending' || (g === 'pan' && isTap)) {
     handleTap(e.clientX, e.clientY)
   } else if (g === 'pan') {
@@ -676,14 +680,16 @@ function onPointerUp(e) {
 // while zoomed in as well, where a touch normally starts a pan.
 function handleTap(x, y) {
   const now = Date.now()
-  if (now - lastTap.t < 300 && Math.hypot(x - lastTap.x, y - lastTap.y) < 30) {
+  const dt = now - lastTap.t
+  const dist = Math.hypot(x - lastTap.x, y - lastTap.y)
+  if (dt < 380 && dist < 40) {
     clearTimeout(tapTimer)
     if (!currentMedia.value?.isVideo) toggleZoomAt(x, y)
     lastTap = { t: 0, x: 0, y: 0 }
   } else {
     lastTap = { t: now, x, y }
     clearTimeout(tapTimer)
-    tapTimer = setTimeout(() => { hudVisible.value = !hudVisible.value }, 280)
+    tapTimer = setTimeout(() => { hudVisible.value = !hudVisible.value }, 390)
   }
 }
 
@@ -730,6 +736,46 @@ const next = () => store.nextMedia()
 const prev = () => store.prevMedia()
 const close = () => store.closeViewer()
 
+function untilClosed(ms = 300) {
+  return new Promise((resolve) => {
+    let unwatch = null
+    const timer = setTimeout(() => {
+      if (unwatch) unwatch()
+      resolve()
+    }, ms)
+    unwatch = watch(() => store.viewerOpen, (open) => {
+      if (!open) {
+        clearTimeout(timer)
+        if (unwatch) unwatch()
+        resolve()
+      }
+    })
+  })
+}
+
+async function closeWithTransition() {
+  const index = store.viewerActiveIndex
+  const from = viewerMediaEl()
+  if (!document.startViewTransition || reduceMotion() || !from) return close()
+  // The tile for the current photo may be off-screen or unrendered: bring it into view first
+  const reveal = { index, ready: null }
+  window.dispatchEvent(new CustomEvent('ax:reveal-tile', { detail: reveal }))
+  if (reveal.ready) await reveal.ready
+  from.style.viewTransitionName = 'ax-media'
+  const vt = trackTransition(document.startViewTransition(async () => {
+    from.style.viewTransitionName = ''
+    close()
+    await untilClosed(300)
+    await nextTick()
+    document.querySelector(`.tile[data-index="${index}"] img`)?.style.setProperty('view-transition-name', 'ax-media')
+  }))
+  vt.finished.finally(() => {
+    const tile = document.querySelector(`.tile[data-index="${index}"]`)
+    tile?.querySelector('img')?.style.removeProperty('view-transition-name')
+    tile?.focus({ preventScroll: true })
+  })
+}
+
 function handleKeydown(e) {
   if (e.ctrlKey || e.metaKey || e.altKey) return
   if (e.key === 'ArrowRight') {
@@ -739,7 +785,7 @@ function handleKeydown(e) {
   } else if (e.key === 'Escape') {
     if (showHelp.value) showHelp.value = false
     else if (showInfo.value) showInfo.value = false
-    else close()
+    else closeWithTransition()
   } else if (e.key === ' ' || e.code === 'Space') {
     e.preventDefault()
     toggleSlideshow()
@@ -805,6 +851,17 @@ onUnmounted(() => {
 .viewer {
   position: fixed; inset: 0; z-index: 1800; /* below Vuetify overlays (menus 2000, dialogs 2400) so they open on top */
   background: rgba(6, 6, 8, var(--veil, 1)); outline: none; user-select: none; -webkit-user-select: none;
+  color-scheme: dark;
+  color: rgba(250, 250, 250, 0.96);
+  --ax-bg: #09090b;
+  --ax-surface: #111113;
+  --ax-surface-2: #18181b;
+  --ax-surface-3: #1f1f23;
+  --ax-text: rgba(250, 250, 250, 0.96);
+  --ax-text-2: rgba(250, 250, 250, 0.64);
+  --ax-text-3: rgba(250, 250, 250, 0.42);
+  --ax-line: rgba(255, 255, 255, 0.08);
+  --ax-line-strong: rgba(255, 255, 255, 0.14);
 }
 .viewer.is-fullscreen { background: #000; }
 .viewer.cursor-hidden, .viewer.cursor-hidden * { cursor: none !important; }
@@ -812,12 +869,24 @@ onUnmounted(() => {
 
 /* ── Bars ── */
 .bar {
-  position: absolute; left: 0; right: 0; z-index: 5; display: flex; background: rgba(var(--v-theme-background), 0.72);
+  position: absolute; left: 0; right: 0; z-index: 5; display: flex; background: rgba(9, 9, 11, 0.72);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   transition: opacity 0.3s var(--ax-ease), transform 0.3s var(--ax-ease);
 }
-.bar.top { top: 0; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px 10px 20px; border-bottom: 1px solid var(--ax-line); }
-.bar.bottom { bottom: 0; flex-direction: column; border-top: 1px solid var(--ax-line); }
+.bar.top {
+  top: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: calc(10px + var(--ax-safe-top)) 16px 10px 20px;
+  border-bottom: 1px solid var(--ax-line);
+}
+.bar.bottom {
+  bottom: 0;
+  flex-direction: column;
+  padding-bottom: var(--ax-safe-bottom);
+  border-top: 1px solid var(--ax-line);
+}
 .bar.top.is-hidden { opacity: 0; transform: translateY(-100%); pointer-events: none; }
 .bar.bottom.is-hidden { opacity: 0; transform: translateY(100%); pointer-events: none; }
 .meta { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
@@ -833,12 +902,21 @@ onUnmounted(() => {
 .controls .group.center { justify-content: center; gap: 8px; }
 .controls .group.end { justify-content: flex-end; }
 .zoom-group { gap: 2px; }
-.zoom-field { display: inline-flex; align-items: center; height: 32px; padding: 0 2px 0 10px; border-radius: 8px; border: 1px solid var(--ax-line-strong); background: var(--ax-bg); transition: border-color var(--ax-fast), box-shadow var(--ax-fast); }
+.zoom-field {
+  display: inline-flex; align-items: center; height: 32px; padding: 0 2px 0 10px;
+  border-radius: 8px; border: 1px solid var(--ax-line-strong); background: var(--ax-bg);
+  transition: border-color var(--ax-fast), box-shadow var(--ax-fast);
+}
 .zoom-field:focus-within, .zoom-field.is-editing { border-color: var(--ax-accent); box-shadow: 0 0 0 3px var(--ax-accent-soft); }
-.zoom-input { width: 38px; padding: 0; border: 0; background: transparent; color: var(--ax-text); font-size: 13px; text-align: right; outline: none; }
+.zoom-input {
+  width: 38px; padding: 0; border: 0; background: transparent; color: var(--ax-text);
+  font-size: 13px; text-align: right; outline: none;
+}
 .zoom-unit { margin: 0 2px 0 1px; font-size: 13px; color: var(--ax-text-2); }
-.zoom-caret { display: grid; place-items: center; width: 26px; height: 26px; margin-left: 2px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ax-text-2); cursor: pointer; }
-.zoom-caret:hover { background: rgba(var(--v-theme-on-surface), 0.08); color: var(--ax-text); }
+.zoom-caret {
+  display: grid; place-items: center; width: 26px; height: 26px; margin-left: 2px;
+  padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ax-text-2); cursor: pointer;
+}
 .zoom-menu { min-width: 170px; max-height: min(70vh, 460px); overflow-y: auto; }
 .zoom-menu .ax-menu-item.is-current { color: var(--ax-accent); background: var(--ax-accent-soft); }
 
@@ -851,7 +929,6 @@ onUnmounted(() => {
   transition: opacity var(--ax-fast), outline-color var(--ax-fast), transform var(--ax-fast) var(--ax-ease);
 }
 .strip-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.strip-item:hover { opacity: 0.9; }
 .strip-item.is-active { opacity: 1; outline: 2px solid var(--ax-accent); transform: translateY(-1px); }
 .strip-play { position: absolute; right: 3px; bottom: 3px; color: #fff; filter: drop-shadow(0 0 3px #000); }
 
@@ -880,19 +957,22 @@ onUnmounted(() => {
 
 /* ── Arrows ── */
 .arrow {
-  position: absolute; top: 50%; z-index: 6; display: grid; place-items: center; width: 42px; height: 42px; margin-top: -21px; padding: 0;
-  border-radius: 50%; border: 1px solid var(--ax-line-strong); background: rgba(var(--v-theme-surface-bright), 0.8);
+  position: absolute; top: 50%; z-index: 6; display: grid; place-items: center; width: 44px; height: 44px; margin-top: -22px; padding: 0;
+  border-radius: 50%; border: 1px solid var(--ax-line-strong); background: rgba(24, 24, 27, 0.8);
   backdrop-filter: blur(12px); color: var(--ax-text); cursor: pointer;
-  transition: opacity 0.3s, background-color var(--ax-fast), transform var(--ax-fast) var(--ax-ease);
+  transition: opacity 0.3s, background-color var(--ax-fast), transform var(--ax-fast) var(--ax-ease), right 0.25s var(--ax-ease);
 }
-.arrow:hover { background: rgb(var(--v-theme-surface-light)); transform: scale(1.06); }
-.arrow.left { left: 20px; } .arrow.right { right: 20px; }
+.arrow.left { left: 20px; }
+.arrow.right { right: 20px; }
+.arrow.right.has-info { right: 320px; }
 .arrow.is-hidden { opacity: 0; pointer-events: none; }
 
 /* ── Details drawer ── */
 .info {
-  position: absolute; z-index: 7; top: 57px; right: 0; bottom: 0; width: 300px; max-width: 86vw; padding: 16px 18px; overflow-y: auto;
-  background: rgba(var(--v-theme-surface), 0.96); backdrop-filter: blur(16px); border-left: 1px solid var(--ax-line);
+  position: absolute; z-index: 7; top: var(--bar-top-h, 56px); right: 0; bottom: 0; width: 300px; max-width: 86vw; padding: 16px 18px;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  background: rgba(17, 17, 19, 0.96); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-left: 1px solid var(--ax-line);
 }
 .info header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .info h3 { margin: 0; font-size: 14px; font-weight: 600; }
@@ -912,19 +992,46 @@ kbd {
   font: 500 11.5px/1 var(--font-mono); color: var(--ax-text);
 }
 
-@media (max-width: 640px) {
-  .arrow, .strip { display: none; }
-  .bar.top { padding: 8px 8px 8px 14px; }
-  .controls { padding: 8px 10px; }
-  .controls { gap: 8px; }
+@media (hover: hover) {
+  .zoom-caret:hover { background: rgba(255, 255, 255, 0.08); color: var(--ax-text); }
+  .strip-item:hover { opacity: 0.9; }
+  .arrow:hover { background: #27272a; transform: scale(1.06); }
+}
+
+@media (max-width: 600px) {
+  .arrow, .strip, .fs-btn, .zoom-fit, .tools-sep { display: none; }
+  .bar.top { gap: 8px; padding: calc(8px + var(--ax-safe-top)) 8px 8px 14px; }
+  .name { max-width: 38vw; font-size: 13px; }
+  .controls { padding: 6px 10px; gap: 6px; }
   .controls .group { flex: 0 0 auto; }
-  .controls .group.zoom-group { flex: 1 1 auto; }
+  .controls .group.zoom-group { flex: 1 1 auto; gap: 1px; }
   .controls .group.center { justify-content: flex-end; gap: 4px; }
   .controls .group.center > .ax-icon-btn { display: none; }
   .btn-label { display: none; }
   .controls .group.end { display: none; }
-  .info { top: 49px; }
+  .zoom-input { font-size: 16px; width: 42px; }
+
+  /* Mobile bottom sheet for info */
+  .info {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 65dvh;
+    border-radius: 16px 16px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--ax-line);
+    padding: 16px 18px calc(16px + var(--ax-safe-bottom));
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+  }
+  .drawer-enter-from, .drawer-leave-to {
+    transform: translateY(28px);
+    opacity: 0;
+  }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .frame, .full, .placeholder, .xfade-enter-active, .xfade-leave-active { transition: none !important; }
 }

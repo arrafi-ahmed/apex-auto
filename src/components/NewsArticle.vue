@@ -1,7 +1,7 @@
 <template>
   <div class="article-page">
     <SiteHeader @home="backToHome">
-      <button class="back" @click="backToHome"><v-icon icon="mdi-arrow-left" size="16"></v-icon>All news</button>
+      <button class="ax-btn is-outline" @click="backToHome"><v-icon icon="mdi-arrow-left" size="16"></v-icon>All news</button>
     </SiteHeader>
 
     <main class="article">
@@ -18,8 +18,8 @@
           <span v-if="item.tags?.includes('launch')" class="tag">Launch</span>
           <span v-if="item.tags?.includes('review')" class="tag">Review</span>
         </div>
-        <figure class="hero">
-          <img :src="item.image" :alt="item.title" />
+        <figure v-if="!heroFailed" class="hero">
+          <img :src="item.image" :alt="item.title" width="1600" height="900" fetchpriority="high" @error="heroFailed = true" />
           <figcaption>Image: {{ item.source }}</figcaption>
         </figure>
         <p v-if="item.summary" class="summary">{{ item.summary }}</p>
@@ -28,12 +28,20 @@
         </a>
       </template>
 
-      <div v-else-if="loading" class="state" aria-busy="true"><div class="spinner"></div></div>
+      <div v-else-if="loading" class="article-sk" aria-busy="true">
+        <div class="sk-meta ax-skeleton"></div>
+        <div class="sk-title ax-skeleton"></div>
+        <div class="sk-title short ax-skeleton"></div>
+        <div class="sk-hero ax-skeleton"></div>
+        <div class="sk-p ax-skeleton"></div>
+        <div class="sk-p ax-skeleton"></div>
+        <div class="sk-p short ax-skeleton"></div>
+      </div>
 
       <div v-else class="state">
         <h1>Article not found</h1>
         <p>It may have rotated out of the archive.</p>
-        <button class="read-more" @click="backToHome">Back to news</button>
+        <button class="ax-btn is-primary" @click="backToHome">Back to news</button>
       </div>
 
       <section v-if="related.length" class="related">
@@ -57,11 +65,13 @@ import NewsCard from './NewsCard.vue'
 const item = ref(null)
 const related = ref([])
 const loading = ref(true)
+const heroFailed = ref(false)
 const originalTitle = document.title
 
 async function load(id) {
   loading.value = true
   item.value = null
+  heroFailed.value = false
   try {
     const [detail, list] = await Promise.all([
       fetch(`/api/news/${id}`).then(r => (r.ok ? r.json() : null)),
@@ -90,11 +100,9 @@ onUnmounted(() => { document.title = originalTitle })
 
 <style scoped>
 .article-page { min-height: 100vh; background: var(--ax-bg); color: var(--ax-text); }
-.back { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--ax-line-strong); background: transparent; color: var(--ax-text); font: 500 13px/1 var(--font-sans); cursor: pointer; white-space: nowrap; }
-.back:hover { background: rgba(var(--v-theme-on-surface), 0.06); }
 
-.article { max-width: 1160px; margin: 0 auto; padding: 48px 24px 96px; }
-.article > .meta, .article > h1, .article > .tags, .article > .hero, .article > .summary, .article > .read-more { max-width: 760px; margin-left: auto; margin-right: auto; }
+.article { max-width: var(--ax-container); margin: 0 auto; padding: 48px var(--ax-gutter) 96px; }
+.article > .meta, .article > h1, .article > .tags, .article > .hero, .article > .summary, .article > .read-more, .article-sk { max-width: 760px; margin-left: auto; margin-right: auto; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 13px; color: var(--ax-text-3); }
 .meta i { width: 3px; height: 3px; border-radius: 50%; background: var(--ax-text-3); }
 .source { font-weight: 600; color: var(--ax-accent); }
@@ -104,7 +112,7 @@ h1 { margin-top: 14px; margin-bottom: 18px; font-size: clamp(26px, 5vw, 40px); f
 .tag.is-model { color: var(--ax-accent); background: var(--ax-accent-soft); }
 .tag.is-tip { color: rgb(var(--v-theme-success)); background: rgba(var(--v-theme-success), 0.12); }
 .hero { margin-top: 0; margin-bottom: 28px; }
-.hero img { width: 100%; max-height: 480px; object-fit: cover; display: block; border-radius: 16px; border: 1px solid var(--ax-line); background: var(--ax-surface); }
+.hero img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; border-radius: 16px; border: 1px solid var(--ax-line); background: var(--ax-surface); }
 .hero figcaption { margin-top: 8px; font-size: 12px; color: var(--ax-text-3); }
 .summary { margin-top: 0; margin-bottom: 32px; font-size: 18px; line-height: 1.7; color: var(--ax-text-2); }
 .read-more {
@@ -113,22 +121,44 @@ h1 { margin-top: 14px; margin-bottom: 18px; font-size: clamp(26px, 5vw, 40px); f
 }
 .read-more:hover { background: rgb(var(--v-theme-primary-darken-1)); }
 
+.article-sk { display: flex; flex-direction: column; gap: 14px; padding: 12px 0 32px; }
+.sk-meta { height: 14px; width: 30%; border-radius: 6px; }
+.sk-title { height: 32px; width: 90%; border-radius: 8px; }
+.sk-title.short { width: 60%; }
+.sk-hero { aspect-ratio: 16 / 9; width: 100%; border-radius: 16px; }
+.sk-p { height: 16px; width: 100%; border-radius: 6px; }
+.sk-p.short { width: 55%; }
+
 .state { padding: 96px 0; text-align: center; color: var(--ax-text-2); }
 .state h1 { margin-bottom: 8px; font-size: 24px; }
 .state p { margin: 0 0 24px; }
-.state .read-more { margin: 0 auto; }
-.spinner { width: 24px; height: 24px; margin: 0 auto; border-radius: 50%; border: 2px solid var(--ax-line-strong); border-top-color: var(--ax-accent); animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.state .ax-btn { margin: 0 auto; }
 
 .related { margin-top: 72px; padding-top: 32px; border-top: 1px solid var(--ax-line); }
 .related h2 { margin: 0 0 20px; font-size: 18px; font-weight: 600; letter-spacing: -0.015em; }
 .related-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-@media (max-width: 800px) { .related-grid { grid-template-columns: 1fr; } }
-@media (max-width: 640px) {
-  .article { padding: 28px 16px 64px; }
+
+@media (max-width: 900px) {
+  .related-grid {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    margin-inline: calc(var(--ax-gutter) * -1);
+    padding: 4px var(--ax-gutter) 12px;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--ax-gutter);
+    scrollbar-width: none;
+  }
+  .related-grid::-webkit-scrollbar { display: none; }
+  .related-grid > * { flex: 0 0 46%; scroll-snap-align: start; }
+}
+
+@media (max-width: 600px) {
+  .article { padding: 24px var(--ax-gutter) calc(64px + var(--ax-safe-bottom)); }
   .summary { font-size: 16.5px; }
-  .hero img { border-radius: 12px; }
+  .hero img, .sk-hero { border-radius: 12px; }
   .read-more { width: 100%; justify-content: center; }
   .related { margin-top: 48px; }
+  .related-grid > * { flex: 0 0 78%; }
 }
 </style>

@@ -12,7 +12,7 @@
       </div>
       <form @submit.prevent="handleUnlock">
         <label class="ax-label" for="portal-pass">Passphrase</label>
-        <div class="reveal">
+        <div class="ax-input-wrap">
           <input
             id="portal-pass"
             v-model="password"
@@ -24,7 +24,7 @@
             :disabled="loading"
             @input="errorMessage = ''"
           />
-          <button type="button" class="ax-icon-btn" :title="showPassword ? 'Hide' : 'Show'" @click="showPassword = !showPassword">
+          <button type="button" class="ax-icon-btn" :title="showPassword ? 'Hide' : 'Show'" :aria-label="showPassword ? 'Hide password' : 'Show password'" @click="showPassword = !showPassword">
             <v-icon :icon="showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'" size="17"></v-icon>
           </button>
         </div>
@@ -86,9 +86,8 @@ async function handleUnlock() {
 </script>
 
 <style scoped>
-.reveal { display: flex; align-items: center; gap: 6px; }
-.submit { width: 100%; height: 38px; margin-top: 12px; }
-.submit + .submit { margin-top: 4px; }
+.submit { width: 100%; height: 40px; margin-top: 12px; }
+.submit + .submit { margin-top: 6px; }
 .has-error {
   border-color: var(--ax-danger) !important;
   box-shadow: 0 0 0 2px var(--ax-danger-soft) !important;

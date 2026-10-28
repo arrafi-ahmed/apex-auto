@@ -28,7 +28,7 @@ export default defineConfig({
     {
       name: 'desktop',
       testIgnore: /\.mobile\.spec\.js$/,
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } }
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 }, colorScheme: 'dark' }
     },
     {
       name: 'mobile',

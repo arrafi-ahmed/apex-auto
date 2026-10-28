@@ -1,6 +1,11 @@
 <template>
   <transition name="panel">
-    <section v-if="store.uploads.length" class="uploads" aria-label="Uploads">
+    <section
+      v-if="store.uploads.length"
+      class="uploads"
+      :class="{ 'is-raised': store.selectedCount > 0 }"
+      aria-label="Uploads"
+    >
       <header class="uploads-head">
         <div class="uploads-title">
           <v-icon :icon="busy ? 'mdi-tray-arrow-up' : failed ? 'mdi-alert-circle-outline' : 'mdi-check-circle-outline'" size="17"
@@ -78,12 +83,36 @@ function closePanel() {
 
 <style scoped>
 .uploads {
-  position: fixed; z-index: 2500; right: 20px; bottom: 20px; width: 340px; max-width: calc(100vw - 24px);
-  border-radius: 14px; overflow: hidden; background: rgb(var(--v-theme-surface-bright));
-  border: 1px solid var(--ax-line-strong); box-shadow: var(--ax-shadow-lg);
+  position: fixed;
+  z-index: 2500;
+  right: 20px;
+  bottom: calc(20px + var(--ax-safe-bottom));
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgb(var(--v-theme-surface-bright));
+  border: 1px solid var(--ax-line-strong);
+  box-shadow: var(--ax-shadow-lg);
+  transition: bottom 0.24s var(--ax-ease);
 }
-.uploads-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 8px 10px 14px; }
-.uploads-title { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 550; }
+.uploads.is-raised {
+  bottom: calc(88px + var(--ax-safe-bottom));
+}
+.uploads-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 8px 10px 14px;
+}
+.uploads-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+  font-weight: 550;
+}
 .uploads-title .v-icon { color: var(--ax-accent); }
 .uploads-title .is-ok { color: rgb(var(--v-theme-success)); }
 .uploads-title .is-bad { color: var(--ax-danger); }
@@ -91,20 +120,58 @@ function closePanel() {
 .overall { height: 2px; background: var(--ax-line); }
 .overall span { display: block; height: 100%; background: var(--ax-accent); transition: width 0.2s linear; }
 .overall.is-done span { background: rgb(var(--v-theme-success)); }
-.uploads-list { margin: 0; padding: 4px 0; max-height: 220px; overflow-y: auto; list-style: none; }
-.item { position: relative; display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; font-size: 12.5px; }
+.uploads-list {
+  margin: 0;
+  padding: 4px 0;
+  max-height: 220px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  list-style: none;
+}
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 14px;
+  font-size: 12.5px;
+}
 .item-name { flex: 1; color: var(--ax-text-2); }
 .item-state { font-size: 12px; color: var(--ax-text-3); }
 .item.is-uploading .item-state { color: var(--ax-accent); }
 .item.is-done .item-state { color: rgb(var(--v-theme-success)); }
 .item.is-error .item-state, .item.is-error .item-name { color: var(--ax-danger); }
-.item-bar { position: absolute; left: 14px; right: 8px; bottom: 2px; height: 2px; border-radius: 2px; background: var(--ax-line); }
+.item-bar {
+  position: absolute;
+  left: 14px;
+  right: 8px;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ax-line);
+}
 .item-bar span { display: block; height: 100%; border-radius: 2px; background: var(--ax-accent); }
-.mini { width: 24px; height: 24px; }
-.mini-spacer { width: 24px; flex: none; }
+.mini { width: 28px; height: 28px; }
+.mini-spacer { width: 28px; flex: none; }
 .item.is-skipped .item-state { color: var(--ax-text-3); }
 .item.is-skipped .item-name { color: var(--ax-text-3); }
 .panel-enter-active, .panel-leave-active { transition: opacity 0.2s var(--ax-ease), transform 0.2s var(--ax-ease); }
 .panel-enter-from, .panel-leave-to { opacity: 0; transform: translateY(10px); }
-@media (max-width: 560px) { .uploads { right: 12px; left: 12px; width: auto; bottom: 84px; } }
+
+@media (pointer: coarse) {
+  .item { padding: 9px 8px 9px 14px; }
+}
+
+@media (max-width: 600px) {
+  .uploads {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+    bottom: calc(12px + var(--ax-safe-bottom));
+  }
+  .uploads.is-raised {
+    bottom: calc(76px + var(--ax-safe-bottom));
+  }
+}
 </style>

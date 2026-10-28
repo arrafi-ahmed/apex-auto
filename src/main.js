@@ -5,6 +5,7 @@ import { createVuetify } from 'vuetify'
 import '@mdi/font/css/materialdesignicons.css'
 import App from './App.vue'
 import './style.css'
+import { readPref, resolve, vuetifyName, applyChrome } from './theme'
 
 // ─── Apex design system ───────────────────────────────────────────────
 // Neutral zinc surfaces + a single indigo accent. Every component reads its
@@ -51,17 +52,28 @@ const apexLight = {
     'surface-bright': '#ffffff',
     'surface-light': '#f4f4f5',
     'surface-variant': '#e4e4e7',
+    'on-surface-variant': '#3f3f46',
     primary: '#4f5bd5',
+    'primary-darken-1': '#4350c4',
     secondary: '#52525b',
     accent: '#6d7bff',
     error: '#dc2626',
     info: '#2563eb',
     success: '#059669',
-    warning: '#d97706'
+    warning: '#d97706',
+    'on-background': '#09090b',
+    'on-surface': '#09090b',
+    'on-primary': '#ffffff'
   },
   variables: {
     'border-color': '#09090b',
-    'border-opacity': 0.08
+    'border-opacity': 0.10,
+    'high-emphasis-opacity': 0.96,
+    'medium-emphasis-opacity': 0.64,
+    'disabled-opacity': 0.38,
+    'hover-opacity': 0.05,
+    'focus-opacity': 0.1,
+    'activated-opacity': 0.1
   }
 }
 
@@ -75,9 +87,12 @@ const fieldDefaults = {
   hideDetails: 'auto'
 }
 
+const initialScheme = resolve(readPref())
+applyChrome(initialScheme)
+
 const vuetify = createVuetify({
   theme: {
-    defaultTheme: 'apexDark',
+    defaultTheme: vuetifyName(initialScheme),
     themes: { apexDark, apexLight }
   },
   defaults: {

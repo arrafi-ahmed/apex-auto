@@ -145,7 +145,8 @@ function publicSettings(s = {}) {
     slideshowInterval: s.slideshowInterval || 3,
     skipVideosInSlideshow: s.skipVideosInSlideshow !== false,
     secretTriggerWord: s.secretTriggerWord || 'guarantee',
-    autoLockMinutes: s.autoLockMinutes || 15
+    autoLockMinutes: s.autoLockMinutes || 15,
+    tabSwitchLock: s.tabSwitchLock !== false
   }
 }
 
@@ -1066,13 +1067,14 @@ app.get('/api/settings', requireAuth, (req, res) => {
 })
 
 app.post('/api/settings', requireAuth, (req, res) => {
-  const { slideshowInterval, skipVideosInSlideshow, newPassword, secretTriggerWord, autoLockMinutes } = req.body
+  const { slideshowInterval, skipVideosInSlideshow, newPassword, secretTriggerWord, autoLockMinutes, tabSwitchLock } = req.body
   const db = loadDB()
 
   if (slideshowInterval !== undefined) db.settings.slideshowInterval = Number(slideshowInterval)
   if (skipVideosInSlideshow !== undefined) db.settings.skipVideosInSlideshow = Boolean(skipVideosInSlideshow)
   if (typeof secretTriggerWord === 'string' && secretTriggerWord.trim()) db.settings.secretTriggerWord = secretTriggerWord.trim()
   if (autoLockMinutes !== undefined) db.settings.autoLockMinutes = Number(autoLockMinutes)
+  if (tabSwitchLock !== undefined) db.settings.tabSwitchLock = Boolean(tabSwitchLock)
   if (typeof newPassword === 'string' && newPassword.length >= 4) {
     db.settings.vaultPasswordHash = hashSecret(newPassword)
   }

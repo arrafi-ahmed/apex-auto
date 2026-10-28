@@ -1,10 +1,10 @@
 <template>
   <section id="latest" class="latest">
-    <div class="wrap">
-      <div class="head">
+    <div class="ax-container">
+      <div class="ax-section-head">
         <div>
-          <div class="kicker">LATEST NEWS</div>
-          <h2>Budget cars and driving know-how</h2>
+          <div class="ax-eyebrow">LATEST NEWS</div>
+          <h2 class="ax-section-title">Budget cars and driving know-how</h2>
         </div>
         <span v-if="data.archiveTotal" class="stamp">{{ data.archiveTotal }} stories · {{ data.sources }} sources<template v-if="data.updatedAt"> · updated {{ relativeTime(data.updatedAt) }}</template></span>
       </div>
@@ -12,7 +12,7 @@
       <!-- Search -->
       <label class="search">
         <v-icon icon="mdi-magnify" size="18"></v-icon>
-        <input v-model="search" type="search" inputmode="search" enterkeyhint="search" placeholder="Search cars, prices, tips…  e.g. Atto, Brio, irit BBM" aria-label="Search news" />
+        <input v-model="search" type="search" inputmode="search" enterkeyhint="search" placeholder="Search cars, prices, tips…" aria-label="Search news" />
       </label>
 
       <!-- Topic tabs -->
@@ -49,11 +49,11 @@
       <div v-else-if="!data.items.length" class="empty">
         <v-icon icon="mdi-newspaper-variant-outline" size="30"></v-icon>
         <p>{{ data.archiveTotal ? 'No stories match your filters.' : 'News is on its way. Please check back shortly.' }}</p>
-        <button v-if="hasFilters" class="btn" @click="reset">Clear filters</button>
+        <button v-if="hasFilters" class="ax-btn is-outline" @click="reset">Clear filters</button>
       </div>
 
       <div v-else class="grid" :class="{ 'is-loading': loading }">
-        <NewsCard v-for="(item, i) in data.items" :key="item.id" :item="item" :eager="i < 3" />
+        <NewsCard v-for="(item, i) in data.items" :key="item.id" :item="item" :row="i > 0" :eager="i < 3" />
       </div>
 
       <!-- Pagination -->
@@ -192,11 +192,7 @@ onUnmounted(() => { clearTimeout(debounce); controller?.abort() })
 </script>
 
 <style scoped>
-.latest { padding: 8px 0 96px; scroll-margin-top: 70px; }
-.wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
-.head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
-.kicker { margin-bottom: 8px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--ax-accent); }
-h2 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -0.025em; line-height: 1.2; }
+.latest { padding: 8px 0 96px; }
 .stamp { font-size: 12.5px; color: var(--ax-text-3); text-align: right; }
 
 .search { position: relative; display: block; margin-bottom: 16px; }
@@ -233,8 +229,6 @@ h2 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -0.025em; lin
 
 .empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 72px 16px; text-align: center; color: var(--ax-text-2); border: 1px dashed var(--ax-line-strong); border-radius: 16px; }
 .empty p { margin: 0; font-size: 14.5px; }
-.btn { height: 38px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--ax-line-strong); background: transparent; color: var(--ax-text); font: 500 13.5px/1 var(--font-sans); cursor: pointer; }
-.btn:hover { background: rgba(var(--v-theme-on-surface), 0.06); }
 
 .pager { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 40px; }
 .pg {
@@ -248,15 +242,21 @@ h2 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -0.025em; lin
 .dots { padding: 0 4px; color: var(--ax-text-3); }
 .status { display: none; font-size: 13px; color: var(--ax-text-2); font-variant-numeric: tabular-nums; }
 
-@media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 960px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 600px) {
   .latest { padding-bottom: 64px; }
-  .wrap { padding: 0 16px; }
-  h2 { font-size: 21px; }
-  .head { flex-direction: column; align-items: flex-start; gap: 6px; }
   .stamp { text-align: left; }
-  .grid { grid-template-columns: 1fr; gap: 16px; }
-  .scroller { margin-left: -16px; margin-right: -16px; padding: 0 16px; }
+  .search input { font-size: 16px; }
+  .grid { grid-template-columns: 1fr; gap: 12px; }
+  .scroller {
+    margin-inline: calc(var(--ax-gutter) * -1);
+    padding: 0 var(--ax-gutter);
+    mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 24px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 24px), transparent 100%);
+  }
   .pager { gap: 8px; }
   .pg.num, .dots { display: none; }
   .status { display: inline; order: 2; }

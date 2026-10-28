@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=JetBrains+Mono:wght@400;500&display=swap');
-
 /* ==========================================================================
    APEX DESIGN TOKENS
    Colors come from the Vuetify theme (src/main.js) so CSS and components
@@ -8,6 +6,14 @@
 :root {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Layout */
+  --ax-container: 1160px;
+  --ax-container-wide: 1280px;
+  --ax-gutter: 24px;
+  --ax-header-h: 64px;
+  --ax-safe-top: env(safe-area-inset-top, 0px);
+  --ax-safe-bottom: env(safe-area-inset-bottom, 0px);
 
   /* Surfaces */
   --ax-bg:            rgb(var(--v-theme-background));
@@ -57,8 +63,54 @@
   --accent-glow: var(--ax-accent-ring);
 }
 
+.v-theme--apexLight {
+  --ax-shadow:    0 1px 2px rgba(9, 9, 11, 0.06), 0 8px 24px -8px rgba(9, 9, 11, 0.12);
+  --ax-shadow-lg: 0 24px 64px -16px rgba(9, 9, 11, 0.18);
+  --ax-text-3:    rgba(var(--v-theme-on-surface), 0.56);
+  --ax-line:      rgba(var(--v-border-color), 0.10);
+  color-scheme: light;
+}
+.v-theme--apexDark {
+  color-scheme: dark;
+}
+.v-theme--apexLight .gradient {
+  background: linear-gradient(135deg, #4f5bd5 0%, #6d7bff 50%, var(--ax-text) 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+@media (max-width: 600px) {
+  :root {
+    --ax-gutter: 16px;
+    --ax-header-h: 56px;
+  }
+}
+
 /* ─── Base ─── */
 *, *::before, *::after { box-sizing: border-box; }
+
+html {
+  scroll-padding-top: calc(var(--ax-header-h) + 8px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+html.ax-vault {
+  overscroll-behavior-y: contain;
+}
+
+/* ── View Transitions ── */
+::view-transition-group(ax-media) { animation-duration: 280ms; animation-timing-function: var(--ax-ease); }
+::view-transition-old(ax-media), ::view-transition-new(ax-media) { height: 100%; object-fit: contain; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 200ms; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
 
 html, body {
   margin: 0;
@@ -71,6 +123,10 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
+
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+img { max-width: 100%; }
 
 .v-application {
   font-family: var(--font-sans) !important;
@@ -186,6 +242,75 @@ html, body {
 /* ==========================================================================
    SHARED PRIMITIVES (ax-*)
    ========================================================================== */
+
+/* Layout container */
+.ax-container {
+  width: 100%;
+  max-width: var(--ax-container);
+  margin-inline: auto;
+  padding-inline: var(--ax-gutter);
+}
+.ax-container.is-wide {
+  max-width: var(--ax-container-wide);
+}
+
+.ax-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.ax-eyebrow {
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ax-accent);
+}
+.ax-section-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+/* Input with icon button inside it */
+.ax-input-wrap {
+  position: relative;
+}
+.ax-input-wrap .ax-input {
+  padding-right: 44px;
+}
+.ax-input-wrap .ax-icon-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+}
+
+/* Horizontal snap scroller for card rows on phones */
+.ax-snap-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  margin-inline: calc(var(--ax-gutter) * -1);
+  padding: 4px var(--ax-gutter) 12px;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--ax-gutter);
+  scrollbar-width: none;
+}
+.ax-snap-row::-webkit-scrollbar {
+  display: none;
+}
+.ax-snap-row > * {
+  flex: 0 0 78%;
+  scroll-snap-align: start;
+}
 
 /* Frosted bar / panel */
 .ax-glass {
@@ -354,6 +479,8 @@ select.ax-input option { background: var(--ax-surface-2); color: var(--ax-text);
 .ax-seg button .v-icon { font-size: 15px; }
 .ax-seg button:hover { color: var(--ax-text); }
 .ax-seg button.is-active { background: var(--ax-surface-3); color: var(--ax-text); box-shadow: 0 0 0 1px var(--ax-line-strong); }
+.ax-seg.is-block, .ax-seg.ax-seg-fill { display: flex; width: 100%; }
+.ax-seg.is-block button, .ax-seg.ax-seg-fill button { flex: 1 1 0; justify-content: center; }
 
 /* ─── Switch & range ─── */
 .ax-switch { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 16px; border-radius: var(--ax-radius); border: 1px solid var(--ax-line); background: var(--ax-bg); cursor: pointer; }
@@ -474,6 +601,28 @@ select.ax-input option { background: var(--ax-surface-2); color: var(--ax-text);
 .text-2 { color: var(--ax-text-2) !important; }
 .text-3 { color: var(--ax-text-3) !important; }
 .tabular { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 600px) {
+  .ax-btn { height: 40px; padding: 0 16px; font-size: 14px; }
+  .ax-btn.is-sm { height: 34px; padding: 0 12px; }
+  .ax-input { font-size: 16px; }                 /* stops iOS focus zoom */
+  .ax-input:not(textarea) { height: 44px; }      /* textarea keeps height:auto */
+  .ax-seg button { height: 34px; }
+  .ax-section-title { font-size: 21px; }
+  .ax-section-head { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .ax-modal { padding: 20px; border-radius: var(--ax-radius-lg); }
+  .ax-modal-head { margin-bottom: 16px; }
+  .ax-modal-actions { margin-top: 20px; }
+  .ax-modal-actions > .ax-btn { flex: 1; }
+  .ax-input-wrap .ax-icon-btn { width: 36px; height: 36px; }
+}
+
+@media (pointer: coarse) {
+  .ax-icon-btn { width: 40px; height: 40px; }
+  .ax-range::-webkit-slider-thumb { width: 22px; height: 22px; }
+  .ax-range::-moz-range-thumb { width: 22px; height: 22px; }
+  .ax-input-wrap .ax-icon-btn { width: 36px; height: 36px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

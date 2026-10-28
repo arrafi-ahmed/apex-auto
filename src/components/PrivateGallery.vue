@@ -28,6 +28,22 @@
       </div>
     </header>
 
+    <!-- Pull-to-refresh indicator (touch only) -->
+    <div
+      v-if="pull > 0 || refreshing"
+      class="ptr-chip"
+      :class="{ 'is-refreshing': refreshing }"
+      :style="{
+        transform: `translateY(${pull}px) ${refreshing ? '' : `rotate(${pull * 3}deg)`}`,
+        opacity: refreshing ? 1 : Math.min(1, pull / 48)
+      }"
+      role="status"
+      aria-live="polite"
+    >
+      <v-icon icon="mdi-refresh" size="18" :class="{ 'spin-anim': refreshing }"></v-icon>
+      <span class="sr-only">Refreshing…</span>
+    </div>
+
     <input ref="fileInputRef" type="file" multiple accept="image/*,video/*" hidden @change="handleFilesSelected" />
 
     <main class="page">
@@ -61,7 +77,7 @@
               </button>
             </div>
             <button v-if="store.adminViewMode !== 'logs'" class="ax-btn is-primary" @click="openNewAlbumModal">
-              <v-icon icon="mdi-plus"></v-icon>New album
+              <v-icon icon="mdi-plus"></v-icon>New collection
             </button>
           </div>
         </div>
@@ -116,13 +132,13 @@
           </div>
 
           <div class="ax-table-wrap">
-            <table class="ax-table">
+            <table class="ax-table manager-table">
               <thead>
                 <tr><th>Collection</th><th>Contents</th><th>Size</th><th>Created</th><th></th></tr>
               </thead>
               <tbody>
                 <tr v-for="album in store.albums" :key="album.id">
-                  <td>
+                  <td class="c-album">
                     <div class="row-album" @click="store.selectAlbum(album)">
                       <span class="row-thumb">
                         <img v-if="album.coverUrl" :src="album.coverUrl" alt="" />
@@ -134,13 +150,13 @@
                       </span>
                     </div>
                   </td>
-                  <td>
+                  <td class="c-contents">
                     <span class="ax-chip mr-1">{{ album.imageCount }} photos</span>
                     <span class="ax-chip">{{ album.videoCount }} videos</span>
                   </td>
-                  <td class="font-mono tabular">{{ album.totalSizeFormatted || '0 B' }}</td>
-                  <td class="text-2 tabular">{{ new Date(album.createdAt).toLocaleDateString() }}</td>
-                  <td>
+                  <td class="c-size font-mono tabular">{{ album.totalSizeFormatted || '0 B' }}</td>
+                  <td class="c-date text-2 tabular">{{ new Date(album.createdAt).toLocaleDateString() }}</td>
+                  <td class="c-actions">
                     <div class="row-actions">
                       <button class="ax-icon-btn" title="Upload" @click="triggerUploadForAlbum(album)"><v-icon icon="mdi-upload-outline" size="17"></v-icon></button>
                       <button class="ax-icon-btn" title="Download .zip" @click="store.downloadAlbum(album.id)"><v-icon icon="mdi-download-outline" size="17"></v-icon></button>
@@ -171,14 +187,14 @@
             </div>
           </div>
           <div class="page-tools">
-            <button class="ax-btn is-outline" :disabled="!store.displayMedia.length" @click="store.startSlideshow">
-              <v-icon icon="mdi-play"></v-icon>Slideshow
+            <button class="ax-btn is-outline" :disabled="!store.displayMedia.length" title="Slideshow" aria-label="Slideshow" @click="store.startSlideshow">
+              <v-icon icon="mdi-play"></v-icon><span class="btn-label">Slideshow</span>
             </button>
-            <button class="ax-btn is-outline" :disabled="!store.displayMedia.length" @click="toggleBatchSelect">
+            <button class="ax-btn is-outline" :disabled="!store.displayMedia.length" :title="store.selectedCount > 0 ? 'Clear selection' : 'Select all'" :aria-label="store.selectedCount > 0 ? 'Clear selection' : 'Select all'" @click="toggleBatchSelect">
               <v-icon :icon="store.selectedCount > 0 ? 'mdi-close' : 'mdi-checkbox-multiple-marked-outline'"></v-icon>
-              {{ store.selectedCount > 0 ? 'Clear' : 'Select' }}
+              <span class="btn-label">{{ store.selectedCount > 0 ? 'Clear' : 'Select' }}</span>
             </button>
-            <button class="ax-btn is-primary" @click="triggerFileInput"><v-icon icon="mdi-upload"></v-icon>Upload</button>
+            <button class="ax-btn is-primary" title="Upload" aria-label="Upload" @click="triggerFileInput"><v-icon icon="mdi-upload"></v-icon>Upload</button>
           </div>
         </div>
 
@@ -226,7 +242,7 @@
                   v-for="t in b.items"
                   :key="t.item.id"
                   class="tile"
-                  :class="{ 'is-selected': isSelected(t.item.id), 'is-selecting': store.selectedCount > 0 }"
+                  :class="{ 'is-selected': isSelected(t.item.id), 'is-selecting': store.selectedCount > 0, 'is-pressing': pressingId === t.item.id }"
                   :style="{ width: `${t.w}px` }"
                   :data-index="t.index"
                   role="gridcell"
@@ -236,6 +252,12 @@
                   @click="handleMediaClick(t.item, t.index, $event)"
                   @keydown="onTileKeydown($event, t)"
                   @focus="focusIndex = t.index"
+                  @pointerdown="onTilePointerDown($event, t)"
+                  @pointermove="onTilePointerMove"
+                  @pointerup="clearPress"
+                  @pointercancel="clearPress"
+                  @pointerleave="clearPress"
+                  @contextmenu="onTileContextMenu"
                 >
                   <img :src="`/thumb/${t.item.id}`" :alt="t.item.title" loading="lazy" decoding="async" draggable="false" />
                   <span v-if="t.item.isVideo" class="tile-play"><v-icon icon="mdi-play" size="22"></v-icon></span>
@@ -278,7 +300,7 @@
       <form class="ax-modal" @submit.prevent="albumDialog.title && saveAlbum()">
         <div class="ax-modal-head">
           <div>
-            <h2 class="ax-modal-title">{{ albumDialog.isEdit ? 'Edit album' : 'New album' }}</h2>
+            <h2 class="ax-modal-title">{{ albumDialog.isEdit ? 'Edit collection' : 'New collection' }}</h2>
             <p class="ax-modal-sub">Originals are stored untouched, at full resolution.</p>
           </div>
           <button type="button" class="ax-icon-btn" @click="albumDialog.open = false"><v-icon icon="mdi-close" size="18"></v-icon></button>
@@ -289,7 +311,7 @@
         <textarea id="album-desc" v-model="albumDialog.description" class="ax-input" rows="3" placeholder="Notes about this collection"></textarea>
         <div class="ax-modal-actions">
           <button type="button" class="ax-btn is-ghost" @click="albumDialog.open = false">Cancel</button>
-          <button type="submit" class="ax-btn is-primary" :disabled="!albumDialog.title">{{ albumDialog.isEdit ? 'Save changes' : 'Create album' }}</button>
+          <button type="submit" class="ax-btn is-primary" :disabled="!albumDialog.title">{{ albumDialog.isEdit ? 'Save changes' : 'Create collection' }}</button>
         </div>
       </form>
     </v-dialog>
@@ -300,7 +322,7 @@
         <div class="ax-modal-head">
           <div>
             <h2 class="ax-modal-title">Delete “{{ deleteConfirmDialog.album?.title }}”?</h2>
-            <p class="ax-modal-sub">Every file in this album is permanently removed from disk. This can’t be undone.</p>
+            <p class="ax-modal-sub">Every file in this collection is permanently removed from disk. This can’t be undone.</p>
           </div>
         </div>
         <div class="ax-modal-actions" style="margin-top: 8px">
@@ -328,24 +350,25 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useVaultStore } from '../stores/vaultStore'
+import { formatBytes, formatDuration, formatRelativeTime } from '../format'
+import { usePullToRefresh } from '../composables/usePullToRefresh'
+import { reduceMotion, viewerMediaEl, trackTransition } from '../viewTransition'
 import MediaViewer from './MediaViewer.vue'
 import BatchBar from './BatchBar.vue'
 import SettingsDialog from './SettingsDialog.vue'
 import AdminAuditLogs from './AdminAuditLogs.vue'
 
 const store = useVaultStore()
+const { pull, refreshing } = usePullToRefresh(async () => {
+  store.registerActivity()
+  if (store.activeAlbum) return store.fetchMedia(store.activeAlbum.id)
+  if (store.adminViewMode === 'logs') return store.fetchAuditLogs()
+  return Promise.all([store.fetchAlbums(), store.fetchVaultStats()])
+}, { enabled: () => !store.viewerOpen && !document.querySelector('.v-overlay--active') })
+
 const fileInputRef = ref(null)
 const targetUploadAlbum = ref(null)
 const isDragging = ref(false)
-
-function formatRelativeTime(isoString) {
-  if (!isoString) return 'Just now'
-  const diffSec = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000)
-  if (diffSec < 45) return 'Just moments ago'
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} min ago`
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} hours ago`
-  return `${Math.floor(diffSec / 86400)} days ago`
-}
 
 const sortOptions = [
   { title: 'Newest first', value: 'newest' },
@@ -371,8 +394,7 @@ watch(() => [store.mediaFilter, store.mediaSort], ([filter, sort]) => {
   try { sessionStorage.setItem(PREFS_KEY, JSON.stringify({ filter, sort })) } catch { /* ignore */ }
 })
 
-// ───────────── Justified grid (rows keep each photo's aspect ratio) + windowing ─────────────
-// ───────────── Justified grid (rows keep each photo's aspect ratio) + windowing ─────────────
+// ───────────── Justified grid + 2-col mobile grid + windowing ─────────────
 const HEADER_H = 44
 const gridRef = ref(null)
 const gridWidth = ref(0)
@@ -380,14 +402,16 @@ const viewTop = ref(0)
 const viewBottom = ref(1200)
 let lastScrollY = 0
 
+const mobileMq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 600px)') : null
+const isCompact = ref(mobileMq ? mobileMq.matches : false)
+const onMq = (e) => { isCompact.value = e.matches; measure(); }
+
 // Adaptive gap: 4px on compact mobile screens, 6px on tablet & desktop
-const gapSize = computed(() => (gridWidth.value < 520 ? 4 : 6))
+const gapSize = computed(() => (isCompact.value ? 4 : 6))
 
 // Dynamic row height tailored for optimal readability across all viewports
 const targetRowH = computed(() => {
   const w = gridWidth.value
-  if (w < 440) return 145       // Compact mobile: 145px ensures 2-3 legible columns, never squished slivers
-  if (w < 600) return 165       // Large mobile / phablet
   if (w < 900) return 185       // Tablet
   if (w < 1440) return 220      // Standard desktop
   return 250                    // Ultrawide / 4K monitors
@@ -424,14 +448,31 @@ const layout = computed(() => {
     else groups.push({ label, items: [{ item, index }] })
   })
 
-  // Prevent portrait images on mobile from being squished into tiny unusable slivers
-  const maxRowItems = width < 360 ? 2 : width < 480 ? 3 : width < 768 ? 5 : 8
+  const maxRowItems = width < 768 ? 5 : 8
 
   for (const group of groups) {
     if (groupByDate.value) {
       blocks.push({ key: `h-${group.label}-${y}`, type: 'h', top: y, height: HEADER_H, label: group.label, count: group.items.length })
       y += HEADER_H
     }
+
+    // 2-column square grid on mobile viewports (<= 600px)
+    if (isCompact.value) {
+      const tileW = Math.floor((width - gap) / 2)
+      for (let i = 0; i < group.items.length; i += 2) {
+        const items = group.items.slice(i, i + 2).map((entry, k) => ({
+          ...entry,
+          w: k === 1 ? width - gap - tileW : tileW
+        }))
+        const block = { key: `r-${items[0].item.id}`, type: 'r', top: y, height: tileW, items }
+        blocks.push(block)
+        rows.push(block)
+        y += tileW + gap
+      }
+      if (groupByDate.value) y += 8
+      continue
+    }
+
     let row = []
     let ratioSum = 0
 
@@ -535,11 +576,86 @@ watch(() => store.loadingMedia, (loading) => {
 const lastSelectedIndex = ref(-1)
 const focusIndex = ref(0)
 
+const LONG_PRESS_MS = 450
+const pressingId = ref(null)
+let press = null
+let suppressClick = false
+let lastPointerType = 'mouse'
+
+function onTilePointerDown(e, t) {
+  lastPointerType = e.pointerType
+  suppressClick = false
+  if (e.pointerType !== 'touch' || e.target.closest('.tile-check, .tile-more')) return
+  clearPress()
+  pressingId.value = t.item.id
+  press = {
+    x: e.clientX,
+    y: e.clientY,
+    timer: setTimeout(() => {
+      press = null
+      pressingId.value = null
+      suppressClick = true
+      if (!isSelected(t.item.id)) store.toggleSelect(t.item.id)
+      lastSelectedIndex.value = t.index
+      navigator.vibrate?.(12)
+      try {
+        if (!sessionStorage.getItem('ax-longpress-hint')) {
+          sessionStorage.setItem('ax-longpress-hint', '1')
+          store.showNotice('Tap more photos to add them', 'info')
+        }
+      } catch { /* storage unavailable: skip the hint */ }
+    }, LONG_PRESS_MS)
+  }
+}
+
+function onTilePointerMove(e) {
+  if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) clearPress()
+}
+
+function clearPress() {
+  if (press) clearTimeout(press.timer)
+  press = null
+  pressingId.value = null
+}
+
+function onTileContextMenu(e) {
+  if (lastPointerType === 'touch') e.preventDefault()
+}
+
 function isSelected(mediaId) {
   return store.selectedMediaIds.includes(mediaId)
 }
 
+function openWithTransition(index, tileEl) {
+  const thumb = tileEl?.querySelector('img')
+  if (!document.startViewTransition || reduceMotion() || !thumb) {
+    store.openViewer(index)
+    return
+  }
+  let targetEl = null
+  thumb.style.viewTransitionName = 'ax-media'
+  try {
+    const vt = trackTransition(document.startViewTransition(async () => {
+      thumb.style.removeProperty('view-transition-name')
+      store.openViewer(index)
+      await nextTick()
+      targetEl = viewerMediaEl()
+      targetEl?.style.setProperty('view-transition-name', 'ax-media')
+    }))
+    vt.finished.catch(() => {}).finally(() => {
+      targetEl?.style.removeProperty('view-transition-name')
+      document.querySelectorAll('[style*="view-transition-name"]').forEach(el => el.style.removeProperty('view-transition-name'))
+    })
+  } catch {
+    store.openViewer(index)
+  }
+}
+
 function handleMediaClick(item, index, event) {
+  if (suppressClick) {
+    suppressClick = false
+    return
+  }
   if (event && event.shiftKey && lastSelectedIndex.value !== -1) {
     store.selectRange(lastSelectedIndex.value, index)
     lastSelectedIndex.value = index
@@ -549,7 +665,7 @@ function handleMediaClick(item, index, event) {
   if (store.selectedCount > 0 || (event && (event.ctrlKey || event.metaKey))) {
     store.toggleSelect(item.id)
   } else {
-    store.openViewer(index)
+    openWithTransition(index, event?.currentTarget)
   }
 }
 
@@ -645,23 +761,6 @@ function onEscape(e) {
   }
 }
 
-// ───────────── Formatting helpers ─────────────
-function formatBytes(bytes) {
-  if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.min(sizes.length - 1, Math.max(0, Math.floor(Math.log(bytes) / Math.log(k))))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-}
-
-function formatDuration(sec) {
-  const s = Math.round(sec)
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  const r = s % 60
-  return h ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`
-}
-
 function formatLockCountdown(sec) {
   if (!sec || sec < 0) return '0:00'
   const m = Math.floor(sec / 60)
@@ -727,17 +826,39 @@ async function executeDeleteAlbum() {
   deleteConfirmDialog.value.open = false
 }
 
+// The viewer asks for a tile to be on screen (and rendered) before animating back to it
+function onRevealTile(e) {
+  const index = e.detail?.index
+  const row = layout.value.rows[rowOfIndex(index)]
+  if (!row || !gridRef.value) return
+  const gridTop = gridRef.value.getBoundingClientRect().top + window.scrollY
+  const top = gridTop + row.top
+  if (top < window.scrollY + 70 || top + row.height > window.scrollY + window.innerHeight - 20) {
+    window.scrollTo({ top: Math.max(0, top - window.innerHeight / 3), behavior: 'instant' })
+    e.detail.ready = new Promise((resolve) => {
+      nextTick(() => requestAnimationFrame(() => { measure(); nextTick(resolve) }))
+    })
+  }
+}
+
 onMounted(() => {
+  document.documentElement.classList.add('ax-vault')
   store.fetchVaultStats()
+  window.addEventListener('ax:reveal-tile', onRevealTile)
   window.addEventListener('scroll', onScrollOrResize, { passive: true })
   window.addEventListener('resize', onScrollOrResize)
   window.addEventListener('keydown', onEscape)
+  if (mobileMq?.addEventListener) mobileMq.addEventListener('change', onMq)
 })
 
 onUnmounted(() => {
+  document.documentElement.classList.remove('ax-vault')
+  clearPress()
+  window.removeEventListener('ax:reveal-tile', onRevealTile)
   window.removeEventListener('scroll', onScrollOrResize)
   window.removeEventListener('resize', onScrollOrResize)
   window.removeEventListener('keydown', onEscape)
+  if (mobileMq?.removeEventListener) mobileMq.removeEventListener('change', onMq)
   resizeObserver?.disconnect()
   if (raf) cancelAnimationFrame(raf)
 })
@@ -754,13 +875,13 @@ onUnmounted(() => {
   -webkit-backdrop-filter: blur(16px) saturate(150%);
   border-bottom: 1px solid var(--ax-line);
 }
-.topbar-inner { max-width: 1280px; margin: 0 auto; height: 56px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.topbar-inner { max-width: var(--ax-container-wide); margin: 0 auto; height: 56px; padding: 0 var(--ax-gutter); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .crumbs { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .brand {
   display: grid; place-items: center; width: 30px; height: 30px; margin-right: 6px;
   border-radius: 8px; border: 1px solid var(--ax-accent-ring); background: var(--ax-accent-soft); color: var(--ax-accent); cursor: pointer;
 }
-.crumb { padding: 4px 6px; border: 0; background: none; border-radius: 6px; color: var(--ax-text-2); font: 500 14px/1 var(--font-sans); cursor: pointer; max-width: 280px; }
+.crumb { display: inline-flex; align-items: center; min-height: 34px; padding: 0 8px; border: 0; background: none; border-radius: 6px; color: var(--ax-text-2); font: 500 14px/1 var(--font-sans); cursor: pointer; max-width: 280px; }
 .crumb:hover { color: var(--ax-text); }
 .crumb.is-current { color: var(--ax-text); cursor: default; }
 .crumb-sep { color: var(--ax-text-3); }
@@ -774,7 +895,7 @@ onUnmounted(() => {
 .lock-dot { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--v-theme-success)); box-shadow: 0 0 0 3px rgba(var(--v-theme-success), 0.18); }
 
 /* ── Page ── */
-.page { max-width: 1280px; margin: 0 auto; padding: 32px 24px 96px; }
+.page { max-width: var(--ax-container-wide); margin: 0 auto; padding: 32px var(--ax-gutter) calc(96px + var(--ax-safe-bottom)); }
 .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
 .head-back { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .page-title { margin: 0; font-size: 24px; font-weight: 650; letter-spacing: -0.025em; line-height: 1.2; }
@@ -790,9 +911,11 @@ onUnmounted(() => {
   background: var(--ax-surface); border: 1px solid var(--ax-line);
   transition: border-color var(--ax-med) var(--ax-ease), transform var(--ax-med) var(--ax-ease), box-shadow var(--ax-med) var(--ax-ease);
 }
-.album:hover .album-cover { border-color: var(--ax-line-strong); transform: translateY(-2px); box-shadow: var(--ax-shadow); }
+@media (hover: hover) {
+  .album:hover .album-cover { border-color: var(--ax-line-strong); transform: translateY(-2px); box-shadow: var(--ax-shadow); }
+  .album:hover .album-cover img { transform: scale(1.035); }
+}
 .album-cover img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 600ms var(--ax-ease); }
-.album:hover .album-cover img { transform: scale(1.035); }
 .album-empty { width: 100%; height: 100%; display: grid; place-items: center; color: var(--ax-text-3); }
 .album-count, .tile-badge {
   position: absolute; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 999px;
@@ -803,10 +926,13 @@ onUnmounted(() => {
   position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px;
   background: rgba(9, 9, 11, 0.62); backdrop-filter: blur(8px); color: #fff; cursor: pointer; opacity: 0; transition: opacity var(--ax-fast);
 }
-.album:hover .album-more, .album-more[aria-expanded='true'], .tile:hover .tile-more, .tile-more[aria-expanded='true'] { opacity: 1; }
-.album-more:hover, .tile-more:hover { background: rgba(9, 9, 11, 0.85); }
+.album-more[aria-expanded='true'], .tile-more[aria-expanded='true'] { opacity: 1; }
+@media (hover: hover) {
+  .album:hover .album-more, .tile:hover .tile-more { opacity: 1; }
+  .album-more:hover, .tile-more:hover { background: rgba(9, 9, 11, 0.85); }
+}
 .album-info { padding: 12px 2px 0; }
-.album-title { font-size: 14.5px; font-weight: 600; letter-spacing: -0.012em; }
+.album-title { font-size: 14.5px; font-weight: 650; letter-spacing: -0.012em; }
 .album-sub { margin-top: 3px; font-size: 12.5px; color: var(--ax-text-2); }
 .album-new {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; aspect-ratio: 4 / 3;
@@ -843,12 +969,29 @@ onUnmounted(() => {
 .tile {
   position: relative; flex: none; height: 100%; overflow: hidden; cursor: pointer; border-radius: 10px; outline: none;
   background: var(--ax-surface); border: 1px solid var(--ax-line);
+  -webkit-tap-highlight-color: transparent;
 }
-.tile:hover { border-color: var(--ax-line-strong); }
+.tile img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform var(--ax-fast) var(--ax-ease);
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+}
+.tile.is-pressing {
+  transform: scale(0.96);
+  transition: transform 450ms var(--ax-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile.is-pressing { transform: none; }
+}
+@media (hover: hover) {
+  .tile:hover { border-color: var(--ax-line-strong); }
+}
 .tile:focus-visible { box-shadow: 0 0 0 2px var(--ax-bg), 0 0 0 4px var(--ax-accent); }
-.tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform var(--ax-fast) var(--ax-ease); }
 .tile::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent 45%); opacity: 0; transition: opacity var(--ax-fast); }
-.tile:hover::after, .tile:focus-visible::after { opacity: 1; }
+.tile:focus-visible::after { opacity: 1; }
+@media (hover: hover) {
+  .tile:hover::after { opacity: 1; }
+}
 .tile.is-selected { box-shadow: 0 0 0 2px var(--ax-accent); border-color: transparent; }
 .tile.is-selected img { transform: scale(0.94); border-radius: 8px; }
 .tile-play {
@@ -860,13 +1003,20 @@ onUnmounted(() => {
   border-radius: 7px; border: 1.5px solid rgba(255, 255, 255, 0.85); background: rgba(9, 9, 11, 0.35); color: transparent; cursor: pointer;
   opacity: 0; transition: opacity var(--ax-fast), background-color var(--ax-fast);
 }
-.tile:hover .tile-check, .tile:focus-visible .tile-check, .tile.is-selecting .tile-check { opacity: 1; }
+.tile-check::before { content: ''; position: absolute; inset: -9px; }
+.tile-more::before { content: ''; position: absolute; inset: -6px; }
+.tile:focus-visible .tile-check, .tile.is-selecting .tile-check { opacity: 1; }
+@media (hover: hover) {
+  .tile:hover .tile-check { opacity: 1; }
+}
 .tile.is-selected .tile-check { opacity: 1; background: var(--ax-accent); border-color: var(--ax-accent); color: #fff; }
 .tile-more { z-index: 2; }
 .tile-badge { left: 8px; bottom: 8px; z-index: 2; font-size: 11px; }
 .tile-fav { position: absolute; z-index: 2; right: 38px; top: 9px; color: #fbbf24; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7)); pointer-events: none; }
 .tile-size { position: absolute; z-index: 1; right: 8px; bottom: 8px; font-size: 11px; color: rgba(255, 255, 255, 0.9); opacity: 0; transition: opacity var(--ax-fast); }
-.tile:hover .tile-size { opacity: 1; }
+@media (hover: hover) {
+  .tile:hover .tile-size { opacity: 1; }
+}
 .no-match { margin: 56px 0; text-align: center; color: var(--ax-text-2); font-size: 14px; }
 
 /* ── Skeletons ── */
@@ -893,34 +1043,105 @@ onUnmounted(() => {
 .drop-card strong { font-size: 16px; color: var(--ax-text); }
 .drop-card span:last-child { font-size: 13px; color: var(--ax-text-2); }
 
+/* ── Pull to refresh ── */
+.ptr-chip {
+  position: fixed;
+  top: calc(56px + var(--ax-safe-top) + 8px);
+  left: 50%;
+  margin-left: -18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--ax-surface-2);
+  border: 1px solid var(--ax-line);
+  box-shadow: var(--ax-shadow);
+  display: grid;
+  place-items: center;
+  z-index: 25;
+  color: var(--ax-accent);
+  pointer-events: none;
+  transition: opacity var(--ax-fast);
+}
+.ptr-chip .spin-anim {
+  animation: ptr-spin 700ms linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ptr-chip { transform: none !important; }
+  .ptr-chip .spin-anim { animation: none; }
+}
+@keyframes ptr-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Touch screens have no hover: keep the select/options controls visible with comfortable tap targets */
 @media (hover: none) {
   .tile-check, .tile-more, .album-more { opacity: 1; }
   .tile-check { width: 30px; height: 30px; border-radius: 9px; }
   .tile-more, .album-more { width: 32px; height: 32px; border-radius: 9px; }
   .tile-size { display: none; }
+  .tile-fav { top: auto; right: 8px; bottom: 8px; }
   .tile::after { opacity: 0.55; }
 }
 
-@media (max-width: 560px) {
-  .album-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 14px 12px;
-  }
+@media (max-width: 600px) {
+  .topbar-inner, .page { padding-inline: var(--ax-gutter); }
+  .crumbs .crumb-sep, .crumbs .crumb-sep + .crumb { display: none; }
+
+  .page-head { flex-direction: column; align-items: stretch; gap: 14px; margin-bottom: 20px; }
+  .page-title { font-size: 20px; }
+  .page-meta { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .page-tools { width: 100%; display: flex; gap: 8px; }
+  .page-tools > .ax-seg { width: 100%; }
+  .page-tools > .ax-seg button { flex: 1; justify-content: center; }
+  .page-tools > .ax-btn { flex: 1; }
+  .page-tools > .ax-btn.is-outline { flex: 0 0 40px; padding: 0; }
+  .page-tools .btn-label { display: none; }
+
+  /* Album grid */
+  .album-grid { grid-template-columns: repeat(2, 1fr); gap: 16px 12px; }
   .album-cover { border-radius: 12px; }
   .album-title { font-size: 13.5px; }
   .album-sub { font-size: 11.5px; }
-}
+  .album-info { padding-top: 10px; }
 
-@media (max-width: 640px) {
-  .topbar-inner, .page { padding-left: 14px; padding-right: 14px; }
-  .page-head { gap: 12px; margin-bottom: 20px; }
-  .page-title { font-size: 20px; }
-  .page-tools { width: 100%; display: flex; gap: 8px; }
-  .page-tools > * { flex: 1; justify-content: center; }
-  .filters { gap: 10px; margin-bottom: 16px; }
-  .filters .ax-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-  .filters .ax-seg::-webkit-scrollbar { display: none; }
-  .filters-right, .filters-right .ax-search, .filters-right .sort { width: 100%; }
+  /* Manager table becomes cards */
+  .stat b { font-size: 18px; }
+  .manager-table thead { display: none; }
+  .manager-table, .manager-table tbody { display: block; }
+  .manager-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "album album" "contents size" "date actions";
+    gap: 10px 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--ax-line);
+  }
+  .manager-table tr:last-child { border-bottom: 0; }
+  .manager-table td { padding: 0; border: 0; }
+  .manager-table tbody tr:hover td { background: none; }
+  .c-album { grid-area: album; }
+  .c-contents { grid-area: contents; }
+  .c-size { grid-area: size; text-align: right; font-size: 12.5px; }
+  .c-date { grid-area: date; align-self: center; font-size: 12.5px; }
+  .c-actions { grid-area: actions; }
+  .row-album { min-width: 0; }
+  .row-desc { max-width: none; }
+
+  /* Filters */
+  .filters { flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 16px; }
+  .filters .ax-seg { width: 100%; overflow: visible; }
+  .filters .ax-seg button { flex: 1; justify-content: center; padding: 0 8px; }
+  .filters-right { display: flex; flex-wrap: nowrap; width: 100%; gap: 8px; }
+  .filters-right .ax-search { flex: 1; width: auto; min-width: 0; }
+  .filters-right .sort { flex: 0 0 136px; width: 136px; }
+
+  /* 2-column square gallery grid on mobile */
+  .sk-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+  .sk-tile { width: auto !important; height: auto; aspect-ratio: 1; border-radius: 8px; }
+  .tile { border-radius: 8px; }
+  .jgroup { font-size: 13px; }
+  .dropzone { padding: 48px 20px; }
+  .dropzone h2 { font-size: 16px; }
 }
 </style>

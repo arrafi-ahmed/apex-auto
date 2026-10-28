@@ -5,7 +5,7 @@
         <a href="#picks" class="nav-link">Value picks</a>
         <a href="#latest" class="nav-link">Latest news</a>
       </nav>
-      <a href="#latest" class="nav-cta">Browse news</a>
+      <a href="#latest" class="ax-btn is-outline">Browse news</a>
     </SiteHeader>
 
     <!-- Hero (the sign-in trigger word lives in this upper section) -->
@@ -68,18 +68,15 @@ function onTriggerClick() {
 
 <style scoped>
 .site { min-height: 100vh; display: flex; flex-direction: column; background: var(--ax-bg); color: var(--ax-text); }
-html { scroll-behavior: smooth; }
 
 .nav { align-items: center; gap: 4px; }
 .nav-link { padding: 8px 14px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: var(--ax-text-2); text-decoration: none; transition: color var(--ax-fast), background-color var(--ax-fast); }
 .nav-link:hover { color: var(--ax-text); background: rgba(var(--v-theme-on-surface), 0.06); }
-.nav-cta { display: inline-flex; align-items: center; height: 34px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--ax-line-strong); color: var(--ax-text); font-size: 13px; font-weight: 500; text-decoration: none; white-space: nowrap; }
-.nav-cta:hover { background: rgba(var(--v-theme-on-surface), 0.06); }
 
-.hero { position: relative; overflow: hidden; padding: 96px 24px 72px; text-align: center; }
+.hero { position: relative; overflow: hidden; padding: 96px var(--ax-gutter) 72px; text-align: center; }
 .hero-glow { position: absolute; top: -30%; left: 50%; transform: translateX(-50%); width: 800px; max-width: 140vw; height: 480px; background: radial-gradient(circle, var(--ax-accent-soft) 0%, transparent 68%); pointer-events: none; }
 .hero-inner { position: relative; max-width: 800px; margin: 0 auto; }
-.hero-tag { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 28px; padding: 6px 14px; border-radius: 999px; background: rgba(var(--v-theme-on-surface), 0.04); border: 1px solid var(--ax-line); font-size: 11px; font-weight: 600; letter-spacing: 0.07em; color: var(--ax-text-2); }
+.hero-tag { display: inline-flex; align-items: center; justify-content: center; max-width: 100%; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; padding: 6px 14px; border-radius: 999px; background: rgba(var(--v-theme-on-surface), 0.04); border: 1px solid var(--ax-line); font-size: 11px; font-weight: 600; letter-spacing: 0.07em; line-height: 1.4; text-align: center; color: var(--ax-text-2); }
 .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--ax-accent); box-shadow: 0 0 8px var(--ax-accent-ring); }
 h1 { margin: 0 0 22px; font-size: clamp(32px, 6vw, 56px); font-weight: 700; letter-spacing: -0.032em; line-height: 1.1; }
 .gradient { background: linear-gradient(135deg, var(--ax-accent) 0%, #a5adff 60%, var(--ax-text) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
@@ -89,17 +86,19 @@ h1 { margin: 0 0 22px; font-size: clamp(32px, 6vw, 56px); font-weight: 700; lett
 .hero-points span { display: inline-flex; align-items: center; gap: 7px; }
 .hero-points .v-icon { color: var(--ax-accent); }
 
-.footer { margin-top: auto; border-top: 1px solid var(--ax-line); padding: 36px 24px; }
-.footer-inner { max-width: 1160px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px; font-size: 12.5px; color: var(--ax-text-3); }
+.footer { margin-top: auto; border-top: 1px solid var(--ax-line); padding: 36px var(--ax-gutter) calc(36px + var(--ax-safe-bottom)); }
+.footer-inner { max-width: var(--ax-container); margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px; font-size: 12.5px; color: var(--ax-text-3); }
 .footer-brand { display: flex; align-items: center; gap: 8px; color: var(--ax-text); font-size: 13.5px; }
 .footer-brand .v-icon { color: var(--ax-accent); }
 .footer p { flex: 1; min-width: 240px; margin: 0; line-height: 1.55; }
 
-@media (max-width: 640px) {
-  .hero { padding: 56px 16px 48px; }
-  .hero-tag { margin-bottom: 22px; font-size: 10px; }
+@media (max-width: 600px) {
+  .hero { padding: 56px var(--ax-gutter) 48px; }
+  .hero-tag { margin-bottom: 22px; font-size: 10.5px; letter-spacing: 0.06em; padding: 6px 12px; }
   .hero-desc { font-size: 15.5px; margin-bottom: 24px; }
   .hero-points { gap: 8px 16px; font-size: 12.5px; }
-  .footer { padding: 28px 16px; }
+  .footer { padding: 28px var(--ax-gutter) calc(28px + var(--ax-safe-bottom)); }
+  .footer-inner { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .footer p { min-width: 0; }
 }
 </style>

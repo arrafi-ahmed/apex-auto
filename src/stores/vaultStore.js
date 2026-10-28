@@ -150,6 +150,7 @@ export const useVaultStore = defineStore('vault', {
         this.skipVideosInSlideshow = data.skipVideosInSlideshow !== false
         this.autoLockMinutes = data.autoLockMinutes || this.autoLockMinutes
         this.triggerWord = data.secretTriggerWord || this.triggerWord
+        this.tabSwitchLock = data.tabSwitchLock !== false
         this.registerActivity()
         this.updateInactivityCountdown()
       } catch (err) {
@@ -208,6 +209,7 @@ export const useVaultStore = defineStore('vault', {
             this.slideshowInterval = data.settings.slideshowInterval || 3
             this.skipVideosInSlideshow = data.settings.skipVideosInSlideshow !== false
             this.autoLockMinutes = data.settings.autoLockMinutes || this.autoLockMinutes
+            this.tabSwitchLock = data.settings.tabSwitchLock !== false
           }
           this.registerActivity()
           this.updateInactivityCountdown()
