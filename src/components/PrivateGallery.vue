@@ -226,9 +226,26 @@
                 <v-icon icon="mdi-magnify"></v-icon>
                 <input v-model="store.mediaQuery" class="ax-input" type="search" placeholder="Search files" />
               </label>
-              <select v-model="store.mediaSort" class="ax-input sort" aria-label="Sort">
-                <option v-for="o in sortOptions" :key="o.value" :value="o.value">{{ o.title }}</option>
-              </select>
+              <v-menu location="bottom end" :close-on-content-click="true">
+                <template #activator="{ props }">
+                  <button v-bind="props" type="button" class="ax-input sort sort-btn" aria-label="Sort" aria-haspopup="listbox">
+                    <span class="text-truncate">{{ currentSortTitle }}</span>
+                    <v-icon icon="mdi-chevron-down" size="16"></v-icon>
+                  </button>
+                </template>
+                <div class="ax-menu" role="listbox" aria-label="Sort">
+                  <button
+                    v-for="o in sortOptions"
+                    :key="o.value"
+                    type="button"
+                    role="option"
+                    class="ax-menu-item"
+                    :class="{ 'is-current': store.mediaSort === o.value }"
+                    :aria-selected="store.mediaSort === o.value"
+                    @click="store.mediaSort = o.value"
+                  >{{ o.title }}</button>
+                </div>
+              </v-menu>
             </div>
           </div>
 
@@ -376,6 +393,8 @@ const sortOptions = [
   { title: 'Largest first', value: 'size-desc' },
   { title: 'Name (A–Z)', value: 'name-asc' }
 ]
+
+const currentSortTitle = computed(() => sortOptions.find(o => o.value === store.mediaSort)?.title || sortOptions[0].title)
 
 const imageCount = computed(() => store.currentMedia.filter(m => !m.isVideo).length)
 const videoCount = computed(() => store.currentMedia.filter(m => m.isVideo).length)
@@ -961,6 +980,9 @@ onUnmounted(() => {
 .filters-right { display: flex; flex-wrap: wrap; gap: 8px; }
 .filters-right .ax-search { width: 240px; }
 .filters-right .sort { width: 168px; }
+.sort-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; cursor: pointer; }
+.sort-btn .v-icon { flex: none; color: var(--ax-text-3); }
+.ax-menu-item.is-current { color: var(--ax-accent); background: var(--ax-accent-soft); }
 .seg-n { color: var(--ax-text-3); font-variant-numeric: tabular-nums; }
 .is-active .seg-n { color: var(--ax-text-2); }
 .jgrid { position: relative; width: 100%; }

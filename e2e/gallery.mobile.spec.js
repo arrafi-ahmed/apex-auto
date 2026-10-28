@@ -134,4 +134,24 @@ test.describe('mobile gallery interactions', () => {
     // Indicator should be hidden after refresh completes
     await expect(page.locator('.ptr-chip')).toHaveCount(0)
   })
+
+  test('sort menu opens once, applies the choice and stays closed', async ({ page }) => {
+    await signIn(page)
+    const title = uniqueTitle('Mobile Sort')
+    const albumId = await createAlbum(page, title)
+    await uploadViaApi(page, albumId, await makeImage(1, { width: 800, height: 800, name: 'img1.jpg' }))
+    await uploadViaApi(page, albumId, await makeImage(2, { width: 800, height: 800, name: 'img2.jpg' }))
+    await openAlbum(page, title)
+
+    const sort = page.getByLabel('Sort', { exact: true }).first()
+    await expect(sort).toContainText('Newest first')
+    await sort.tap()
+    await expect(page.locator('.v-overlay--active .ax-menu-item')).toHaveCount(4)
+    await page.locator('.v-overlay--active .ax-menu-item', { hasText: 'Oldest first' }).tap()
+
+    await expect(sort).toContainText('Oldest first')
+    // It must not come back on its own, even across several auto-lock ticker re-renders
+    await page.waitForTimeout(2500)
+    await expect(page.locator('.v-overlay--active')).toHaveCount(0)
+  })
 })

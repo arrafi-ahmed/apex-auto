@@ -1,17 +1,17 @@
 <template>
-  <v-theme-provider v-if="store.viewerOpen" theme="apexDark" class="viewer-theme">
   <div
+    v-if="store.viewerOpen"
     ref="viewerRef"
     class="viewer"
-      :class="{ 'is-fullscreen': isFullscreen, 'cursor-hidden': isFullscreen && !hudVisible }"
-      :style="{ '--veil': veil, '--bar-top-h': `${barTop}px`, '--bar-top': hudVisible && !isFullscreen ? `${barTop}px` : '0px', '--bar-bottom': hudVisible && !isFullscreen ? `${barBottom}px` : '0px' }"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Media viewer"
-      tabindex="0"
-      @keydown="handleKeydown"
-      @mousemove="onMouseMoveViewer"
-    >
+    :class="{ 'is-fullscreen': isFullscreen, 'cursor-hidden': isFullscreen && !hudVisible }"
+    :style="{ '--veil': veil, '--bar-top-h': `${barTop}px`, '--bar-top': hudVisible && !isFullscreen ? `${barTop}px` : '0px', '--bar-bottom': hudVisible && !isFullscreen ? `${barBottom}px` : '0px' }"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Media viewer"
+    tabindex="0"
+    @keydown="handleKeydown"
+    @mousemove="onMouseMoveViewer"
+  >
       <div v-if="store.slideshowPlaying && !isFullscreen" class="progress" :style="{ width: `${progressPercent}%` }"></div>
 
       <!-- Top bar -->
@@ -209,7 +209,6 @@
       </div>
     </v-dialog>
   </div>
-  </v-theme-provider>
 </template>
 
 <script setup>
