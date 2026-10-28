@@ -57,6 +57,7 @@ test.describe('viewer zoom (desktop)', () => {
     // click() fails if the menu were hidden behind the viewer
     await menu.locator('.ax-menu-item', { hasText: /^400%$/ }).click()
     await expect.poll(() => zoomValue(page)).toBe(400)
+    await expect(menu).not.toBeVisible()
 
     await page.locator('.zoom-caret').click()
     await page.locator('.zoom-menu .ax-menu-item', { hasText: 'Fit to page' }).click()

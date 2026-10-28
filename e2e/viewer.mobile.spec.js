@@ -28,6 +28,9 @@ test.describe('viewer on a phone', () => {
     await page.touchscreen.tap(190, 400)
     await expect(page.locator('.bar.top')).not.toHaveClass(/is-hidden/)
     await expect.poll(async () => (await stage.boundingBox()).height, { timeout: 5000 }).toBeLessThan(height - 40)
+    // Verify it stays visible and does not disappear after ~0.5s
+    await page.waitForTimeout(2000)
+    await expect(page.locator('.bar.top')).not.toHaveClass(/is-hidden/)
   })
 
   test('double-tap zooms in and a second double-tap zooms back out', async ({ page }) => {

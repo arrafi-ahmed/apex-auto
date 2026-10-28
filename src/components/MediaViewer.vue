@@ -15,7 +15,7 @@
       <div v-if="store.slideshowPlaying && !isFullscreen" class="progress" :style="{ width: `${progressPercent}%` }"></div>
 
       <!-- Top bar -->
-      <div ref="topBarRef" class="bar top" :class="{ 'is-hidden': !hudVisible }">
+      <div ref="topBarRef" class="bar top" :class="{ 'is-hidden': !hudVisible }" @pointerdown="showHud()">
         <div class="meta">
           <span class="name text-truncate">{{ currentMedia?.title || currentMedia?.originalName }}</span>
           <span class="count font-mono tabular">{{ store.viewerActiveIndex + 1 }} / {{ store.displayMedia.length }}</span>
@@ -109,7 +109,7 @@
     </transition>
 
     <!-- Bottom: filmstrip + controls -->
-    <div v-if="!isFullscreen" ref="bottomBarRef" class="bar bottom" :class="{ 'is-hidden': !hudVisible }">
+    <div v-if="!isFullscreen" ref="bottomBarRef" class="bar bottom" :class="{ 'is-hidden': !hudVisible }" @pointerdown="showHud()">
       <div v-if="store.displayMedia.length > 1" ref="stripRef" class="strip" role="listbox" aria-label="Items">
         <button
           v-for="(m, i) in store.displayMedia"
@@ -256,6 +256,7 @@ let pinchStartScale = 1
 let lastTap = { t: 0, x: 0, y: 0 }
 let lastPointerType = 'mouse'
 let tapTimer = null
+let lastTouchTime = 0
 
 // Slideshow
 const progressPercent = ref(0)
@@ -293,17 +294,44 @@ function measureStage() {
 // Backdrop fades as the viewer is swiped down to close
 const veil = computed(() => (1 - Math.min(dragY.value / 420, 0.7)).toFixed(2))
 
-function onMouseMoveViewer() {
+const HUD_IDLE_MS = 3500
+const HUD_IDLE_FS_MS = 2500
+
+function showHud(durationMs = isFullscreen.value ? HUD_IDLE_FS_MS : HUD_IDLE_MS) {
   hudVisible.value = true
   if (hudTimer) clearTimeout(hudTimer)
-  const idleMs = isFullscreen.value ? 1500 : 2500
   hudTimer = setTimeout(() => {
     const hasActiveOverlay = !!document.querySelector('.v-overlay--active')
     const isEditingZoom = zoomDraft.value !== null
-    if (!isPanning.value && !showHelp.value && !hasActiveOverlay && !isEditingZoom) {
+    if (!isPanning.value && !showHelp.value && !showInfo.value && !hasActiveOverlay && !isEditingZoom) {
       hudVisible.value = false
     }
-  }, idleMs)
+  }, durationMs)
+}
+
+function hideHud() {
+  if (hudTimer) clearTimeout(hudTimer)
+  const hasActiveOverlay = !!document.querySelector('.v-overlay--active')
+  const isEditingZoom = zoomDraft.value !== null
+  if (!showHelp.value && !showInfo.value && !hasActiveOverlay && !isEditingZoom) {
+    hudVisible.value = false
+  }
+}
+
+function toggleHud() {
+  if (hudVisible.value) {
+    hideHud()
+  } else {
+    showHud()
+  }
+}
+
+function onMouseMoveViewer(e) {
+  // Ignore synthetic mousemove emitted on touch devices after taps
+  if (Date.now() - lastTouchTime < 1000 || e?.sourceCapabilities?.firesTouchEvents) {
+    return
+  }
+  showHud()
 }
 
 function onImageLoad(e) {
@@ -353,7 +381,7 @@ watch(() => store.viewerOpen, (open) => {
     fullLoaded.value = false
     natural.value = { w: 0, h: 0 }
     preloadNeighbours()
-    onMouseMoveViewer()
+    showHud()
     nextTick(() => {
       measureBars()
       measureStage()
@@ -363,6 +391,8 @@ watch(() => store.viewerOpen, (open) => {
   } else {
     stopSlideshowTimer()
     showInfo.value = false
+    if (tapTimer) { clearTimeout(tapTimer); tapTimer = null }
+    if (hudTimer) { clearTimeout(hudTimer); hudTimer = null }
   }
 })
 
@@ -587,6 +617,7 @@ function formatDuration(sec) {
 
 // ---- Pointer gestures: drag-to-pan when zoomed; on touch also swipe, pinch and double-tap ----
 function onPointerDown(e) {
+  if (e.pointerType === 'touch') lastTouchTime = Date.now()
   lastPointerType = e.pointerType
   // Let the native video controls handle their own taps and drags
   if (currentMedia.value?.isVideo && e.target.closest('video')) return
@@ -615,6 +646,7 @@ function onPointerDown(e) {
 }
 
 function onPointerMove(e) {
+  if (e.pointerType === 'touch') lastTouchTime = Date.now()
   if (!pointers.has(e.pointerId)) return
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
 
@@ -640,6 +672,7 @@ function onPointerMove(e) {
 }
 
 function onPointerUp(e) {
+  if (e.pointerType === 'touch') lastTouchTime = Date.now()
   if (!pointers.has(e.pointerId)) return
   pointers.delete(e.pointerId)
 
@@ -683,12 +716,16 @@ function handleTap(x, y) {
   const dist = Math.hypot(x - lastTap.x, y - lastTap.y)
   if (dt < 380 && dist < 40) {
     clearTimeout(tapTimer)
+    tapTimer = null
     if (!currentMedia.value?.isVideo) toggleZoomAt(x, y)
     lastTap = { t: 0, x: 0, y: 0 }
   } else {
     lastTap = { t: now, x, y }
     clearTimeout(tapTimer)
-    tapTimer = setTimeout(() => { hudVisible.value = !hudVisible.value }, 390)
+    tapTimer = setTimeout(() => {
+      toggleHud()
+      tapTimer = null
+    }, 390)
   }
 }
 
@@ -716,23 +753,18 @@ function toggleFullscreen() {
 function handleFullscreenChange() {
   isFullscreen.value = !!document.fullscreenElement
   nextTick(measureStage)
-  if (isFullscreen.value) {
-    if (hudTimer) clearTimeout(hudTimer)
-    hudTimer = setTimeout(() => {
-      const hasActiveOverlay = !!document.querySelector('.v-overlay--active')
-      const isEditingZoom = zoomDraft.value !== null
-      if (!isPanning.value && !showHelp.value && !hasActiveOverlay && !isEditingZoom) {
-        hudVisible.value = false
-      }
-    }, 1500)
-  } else {
-    hudVisible.value = true
-  }
+  showHud()
 }
 
 // ---- Navigation ----
-const next = () => store.nextMedia()
-const prev = () => store.prevMedia()
+const next = () => {
+  store.nextMedia()
+  if (hudVisible.value) showHud()
+}
+const prev = () => {
+  store.prevMedia()
+  if (hudVisible.value) showHud()
+}
 const close = () => store.closeViewer()
 
 function untilClosed(ms = 300) {
