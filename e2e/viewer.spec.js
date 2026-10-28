@@ -129,4 +129,45 @@ test.describe('viewer controls (desktop)', () => {
     await expect(page.locator('.bar.top')).toHaveClass(/is-hidden/, { timeout: 6000 })
     await expect.poll(() => zoomValue(page), { timeout: 5000 }).toBeGreaterThan(fitWithBars)
   })
+
+  test('slideshow continues playing across clicks on stage, details, zoom, filmstrip, and menus', async ({ page }) => {
+    await openViewerOn(page, 'wide.jpg')
+
+    // Set interval to 1s for fast slideshow progression
+    await page.getByLabel('Seconds per slide').click()
+    await page.locator('.ax-menu-item', { hasText: /^1s$/ }).click()
+
+    // Start slideshow via bottom bar button
+    await page.locator('.controls .group.center button', { hasText: 'Slideshow' }).click()
+    await expect(page.locator('.controls .group.center button', { hasText: 'Pause' })).toBeVisible()
+    await expect(page.locator('.progress')).toBeVisible()
+
+    // 1. Clicking Details (I) opens the drawer and slideshow still advances
+    await page.getByTitle('Details (I)').click()
+    await expect(page.locator('aside.info')).toBeVisible()
+    const countBeforeDetails = await page.locator('.bar.top .count').first().textContent()
+    await expect.poll(async () => await page.locator('.bar.top .count').first().textContent(), { timeout: 3500 }).not.toBe(countBeforeDetails)
+
+    // 2. Focusing and blurring zoom input (clicking zoom input then clicking stage) does not stop slideshow
+    await page.locator('.zoom-input').click()
+    await page.locator('.stage').click({ position: { x: 200, y: 200 } })
+    const countAfterZoomBlur = await page.locator('.bar.top .count').first().textContent()
+    await expect.poll(async () => await page.locator('.bar.top .count').first().textContent(), { timeout: 3500 }).not.toBe(countAfterZoomBlur)
+
+    // 3. Double-clicking stage or clicking Zoom In zooms in, resets timer, and still advances to next slide (resetting zoom)
+    await page.getByTitle('Zoom in', { exact: true }).click()
+    const countAfterZoomIn = await page.locator('.bar.top .count').first().textContent()
+    await expect.poll(async () => await page.locator('.bar.top .count').first().textContent(), { timeout: 3500 }).not.toBe(countAfterZoomIn)
+
+    // 4. Clicking filmstrip item jumps to that slide and continues playing
+    await page.locator('.strip-item').first().click()
+    await expect(page.locator('.bar.top .count').first()).toHaveText('1 / 3')
+    await expect.poll(async () => await page.locator('.bar.top .count').first().textContent(), { timeout: 3500 }).not.toBe('1 / 3')
+
+    // 5. Space key pauses and resumes even after clicking menus/buttons
+    await page.keyboard.press('Space')
+    await expect(page.locator('.controls .group.center button', { hasText: 'Slideshow' })).toBeVisible()
+    await page.keyboard.press('Space')
+    await expect(page.locator('.controls .group.center button', { hasText: 'Pause' })).toBeVisible()
+  })
 })

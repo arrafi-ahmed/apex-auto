@@ -9,10 +9,9 @@
     aria-modal="true"
     aria-label="Media viewer"
     tabindex="0"
-    @keydown="handleKeydown"
     @mousemove="onMouseMoveViewer"
   >
-      <div v-if="store.slideshowPlaying && !isFullscreen" class="progress" :style="{ width: `${progressPercent}%` }"></div>
+      <div v-if="store.slideshowPlaying" class="progress" :style="{ width: `${progressPercent}%` }"></div>
 
       <!-- Top bar -->
       <div ref="topBarRef" class="bar top" :class="{ 'is-hidden': !hudVisible }" @pointerdown="showHud()">
@@ -48,6 +47,7 @@
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
+      @lostpointercapture="onPointerCancel"
       @dblclick="onDoubleClick"
     >
       <transition name="xfade">
@@ -70,6 +70,7 @@
               :alt="currentMedia.title"
               draggable="false"
               @load="onImageLoad"
+              @error="onImageError"
             />
             <div v-if="!fullLoaded && showSpinner" class="spinner" aria-hidden="true"></div>
           </template>
@@ -79,8 +80,11 @@
             class="layer video"
             :src="`/media-stream/${currentMedia.id}`"
             :poster="`/thumb/${currentMedia.id}`"
+            :muted="isMuted"
             controls autoplay playsinline
+            @loadedmetadata="onVideoLoaded"
             @ended="onVideoEnded"
+            @error="onVideoError"
           ></video>
         </div>
       </transition>
@@ -109,7 +113,7 @@
     </transition>
 
     <!-- Bottom: filmstrip + controls -->
-    <div v-if="!isFullscreen" ref="bottomBarRef" class="bar bottom" :class="{ 'is-hidden': !hudVisible }" @pointerdown="showHud()">
+    <div ref="bottomBarRef" class="bar bottom" :class="{ 'is-hidden': !hudVisible }" @pointerdown="showHud()">
       <div v-if="store.displayMedia.length > 1" ref="stripRef" class="strip" role="listbox" aria-label="Items">
         <button
           v-for="(m, i) in store.displayMedia"
@@ -120,7 +124,7 @@
           role="option"
           :aria-selected="i === store.viewerActiveIndex"
           :title="m.title"
-          @click="store.viewerActiveIndex = i"
+          @click="selectSlide(i)"
         >
           <img :src="`/thumb/${m.id}`" alt="" loading="lazy" draggable="false" />
           <v-icon v-if="m.isVideo" class="strip-play" icon="mdi-play" size="12"></v-icon>
@@ -369,14 +373,33 @@ function onImageLoad(e) {
   preloadNeighbours()
 }
 
+function onImageError() {
+  clearTimeout(spinnerTimer)
+  showSpinner.value = false
+  preloadNeighbours()
+}
+
 // ---- Preload neighbours so stepping through feels instant ----
 const preloaded = []
 function preloadNeighbours() {
   const list = store.displayMedia
   if (!list.length) return
   preloaded.length = 0
-  for (const offset of [1, -1]) {
-    const m = list[(store.viewerActiveIndex + offset + list.length) % list.length]
+  const indices = new Set([
+    (store.viewerActiveIndex + 1 + list.length) % list.length,
+    (store.viewerActiveIndex - 1 + list.length) % list.length
+  ])
+  if (store.skipVideosInSlideshow) {
+    for (let step = 1; step < list.length; step++) {
+      const idx = (store.viewerActiveIndex + step) % list.length
+      if (!list[idx]?.isVideo) {
+        indices.add(idx)
+        break
+      }
+    }
+  }
+  for (const idx of indices) {
+    const m = list[idx]
     if (m && !m.isVideo) {
       const img = new Image()
       img.src = `/preview/${m.id}`
@@ -391,8 +414,53 @@ function scrollStripToActive() {
   })
 }
 
+function clearPointerState() {
+  pointers.clear()
+  gesture.value = null
+  isPanning.value = false
+  dragX.value = 0
+  dragY.value = 0
+}
+
+function ensureVideoPlayback() {
+  const v = videoPlayerRef.value
+  if (!v || !currentMedia.value?.isVideo) return
+  v.muted = isMuted.value
+  const playPromise = v.play()
+  if (playPromise && typeof playPromise.catch === 'function') {
+    playPromise.catch(() => {
+      if (!videoPlayerRef.value) return
+      videoPlayerRef.value.muted = true
+      isMuted.value = true
+      videoPlayerRef.value.play().catch(() => {})
+    })
+  }
+}
+
+function onVideoLoaded() {
+  if (store.viewerOpen && currentMedia.value?.isVideo) {
+    ensureVideoPlayback()
+  }
+}
+
+function onVideoError() {
+  clearTimeout(spinnerTimer)
+  showSpinner.value = false
+}
+
+watch(() => store.displayMedia.length, (len) => {
+  if (!store.viewerOpen) return
+  if (len === 0) {
+    close()
+  } else if (store.viewerActiveIndex >= len) {
+    store.viewerActiveIndex = len - 1
+  }
+})
+
 watch(() => store.viewerActiveIndex, () => {
   resetZoom()
+  clearPointerState()
+  zoomDraft.value = null
   elapsedMs = 0
   progressPercent.value = 0
   fullLoaded.value = false
@@ -404,11 +472,17 @@ watch(() => store.viewerActiveIndex, () => {
     dimensions.value = null
     natural.value = { w: 0, h: 0 }
   }
+  if (store.slideshowPlaying && !slideshowTimer) {
+    startSlideshowTimer()
+  }
   scrollStripToActive()
 })
 
 watch(() => store.viewerOpen, (open) => {
   if (open) {
+    resetZoom()
+    clearPointerState()
+    zoomDraft.value = null
     fullLoaded.value = false
     scheduleSpinner()
     if (currentMedia.value?.width && currentMedia.value?.height) {
@@ -417,6 +491,9 @@ watch(() => store.viewerOpen, (open) => {
     } else {
       dimensions.value = null
       natural.value = { w: 0, h: 0 }
+    }
+    if (store.slideshowPlaying) {
+      startSlideshowTimer()
     }
     showHud()
     nextTick(() => {
@@ -427,7 +504,11 @@ watch(() => store.viewerOpen, (open) => {
     })
   } else {
     stopSlideshowTimer()
+    resetZoom()
+    clearPointerState()
+    zoomDraft.value = null
     showInfo.value = false
+    showHelp.value = false
     clearTimeout(spinnerTimer)
     showSpinner.value = false
     if (tapTimer) { clearTimeout(tapTimer); tapTimer = null }
@@ -436,8 +517,20 @@ watch(() => store.viewerOpen, (open) => {
 })
 
 watch(() => store.slideshowPlaying, (playing) => {
-  if (playing) startSlideshowTimer()
-  else stopSlideshowTimer()
+  if (playing) {
+    resetZoom()
+    startSlideshowTimer()
+    if (currentMedia.value?.isVideo) {
+      const v = videoPlayerRef.value
+      if (v?.ended) {
+        onVideoEnded()
+      } else if (v?.paused) {
+        ensureVideoPlayback()
+      }
+    }
+  } else {
+    stopSlideshowTimer()
+  }
 })
 
 function startSlideshowTimer() {
@@ -446,12 +539,30 @@ function startSlideshowTimer() {
   progressPercent.value = 0
 
   slideshowTimer = setInterval(() => {
-    // Videos play to the end first; zoomed-in or open panels mean the viewer is busy inspecting
-    if (currentMedia.value?.isVideo && !store.skipVideosInSlideshow) return
-    if (scale.value > 1.001 || showHelp.value || showInfo.value) return
+    if (!store.viewerOpen || !store.slideshowPlaying) return
+    if (!store.displayMedia.length) return
+
+    // Pause ticking only while the user is actively dragging/pinching, editing zoom input, or reading shortcuts modal
+    const isActivelyDragging = isPanning.value || gesture.value === 'pan' || gesture.value === 'swipe-x' || gesture.value === 'swipe-y' || gesture.value === 'pinch'
+    if (isActivelyDragging || zoomDraft.value !== null || showHelp.value) return
+
+    const hasImages = store.displayMedia.some(m => !m.isVideo)
+    const skipVideos = store.skipVideosInSlideshow && hasImages
+
+    // If a video is actively playing (and not set to be skipped), let it play to completion
+    if (currentMedia.value?.isVideo && !skipVideos) {
+      const v = videoPlayerRef.value
+      if (v && !v.paused && !v.ended && !v.error) {
+        if (v.duration > 0 && Number.isFinite(v.duration)) {
+          progressPercent.value = Math.min(100, (v.currentTime / v.duration) * 100)
+        }
+        elapsedMs = 0
+        return
+      }
+    }
 
     elapsedMs += TICK_MS
-    const totalMs = store.slideshowInterval * 1000
+    const totalMs = Math.max(1, Number(store.slideshowInterval) || 3) * 1000
     progressPercent.value = Math.min(100, (elapsedMs / totalMs) * 100)
 
     if (elapsedMs >= totalMs) {
@@ -467,20 +578,36 @@ function stopSlideshowTimer() {
     clearInterval(slideshowTimer)
     slideshowTimer = null
   }
+  elapsedMs = 0
   progressPercent.value = 0
 }
 
 function onVideoEnded() {
-  if (store.slideshowPlaying) store.nextMedia()
+  if (!store.slideshowPlaying) return
+  elapsedMs = 0
+  progressPercent.value = 0
+  const prevIdx = store.viewerActiveIndex
+  store.nextMedia()
+  if (store.viewerActiveIndex === prevIdx && videoPlayerRef.value) {
+    videoPlayerRef.value.currentTime = 0
+    ensureVideoPlayback()
+  }
 }
 
 function toggleSlideshow() {
-  store.slideshowPlaying = !store.slideshowPlaying
+  if (store.slideshowPlaying) {
+    store.slideshowPlaying = false
+  } else {
+    resetZoom()
+    store.startSlideshow()
+  }
+  showHud()
 }
 
 function setRotationInterval(sec) {
   store.slideshowInterval = sec
   if (store.slideshowPlaying) startSlideshowTimer()
+  showHud()
 }
 
 function toggleMute() {
@@ -548,6 +675,10 @@ function zoomAt(newScale, cx, cy) {
   }
   scale.value = s1
   clampPan()
+  if (store.slideshowPlaying) {
+    elapsedMs = 0
+    progressPercent.value = 0
+  }
 }
 
 function setScale(v) {
@@ -556,6 +687,7 @@ function setScale(v) {
 
 function setPercent(p) {
   zoomAt(p / 100 / fit.value)
+  if (hudVisible.value) showHud()
 }
 
 function onWheel(e) {
@@ -588,6 +720,11 @@ function fitWidth() {
   panX.value = 0
   const shownH = n.h * widthScale
   panY.value = shownH > stageSize.value.h ? (shownH - stageSize.value.h) / 2 : 0
+  if (store.slideshowPlaying) {
+    elapsedMs = 0
+    progressPercent.value = 0
+  }
+  if (hudVisible.value) showHud()
 }
 
 // Double-click / double-tap / Z: zoom in around the pointer (at least 2x the fitted size, never
@@ -618,7 +755,9 @@ function commitZoom() {
   if (zoomDraft.value === null) return
   const value = parseInt(zoomDraft.value, 10)
   zoomDraft.value = null
-  if (Number.isFinite(value)) setPercent(Math.min(800, Math.max(10, value)))
+  if (Number.isFinite(value) && value !== percent.value) {
+    setPercent(Math.min(800, Math.max(10, value)))
+  }
 }
 
 function onZoomKey(e) {
@@ -656,6 +795,7 @@ function formatDuration(sec) {
 
 // ---- Pointer gestures: drag-to-pan when zoomed; on touch also swipe, pinch and double-tap ----
 function onPointerDown(e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return
   if (e.pointerType === 'touch') lastTouchTime = Date.now()
   lastPointerType = e.pointerType
   // Let the native video controls handle their own taps and drags
@@ -796,12 +936,25 @@ function handleFullscreenChange() {
 }
 
 // ---- Navigation ----
+const selectSlide = (i) => {
+  elapsedMs = 0
+  progressPercent.value = 0
+  store.viewerActiveIndex = i
+  if (store.slideshowPlaying && !slideshowTimer) startSlideshowTimer()
+  if (hudVisible.value) showHud()
+}
 const next = () => {
+  elapsedMs = 0
+  progressPercent.value = 0
   store.nextMedia()
+  if (store.slideshowPlaying && !slideshowTimer) startSlideshowTimer()
   if (hudVisible.value) showHud()
 }
 const prev = () => {
+  elapsedMs = 0
+  progressPercent.value = 0
   store.prevMedia()
+  if (store.slideshowPlaying && !slideshowTimer) startSlideshowTimer()
   if (hudVisible.value) showHud()
 }
 const close = () => store.closeViewer()
@@ -849,8 +1002,10 @@ async function closeWithTransition() {
 function handleKeydown(e) {
   if (e.ctrlKey || e.metaKey || e.altKey) return
   if (e.key === 'ArrowRight') {
+    e.preventDefault()
     next()
   } else if (e.key === 'ArrowLeft') {
+    e.preventDefault()
     prev()
   } else if (e.key === 'Escape') {
     if (showHelp.value) showHelp.value = false
@@ -858,6 +1013,9 @@ function handleKeydown(e) {
     else closeWithTransition()
   } else if (e.key === ' ' || e.code === 'Space') {
     e.preventDefault()
+    if (document.activeElement instanceof HTMLElement && document.activeElement !== viewerRef.value) {
+      viewerRef.value?.focus()
+    }
     toggleSlideshow()
   } else if (e.key === 'Delete' || e.key === 'Backspace') {
     e.preventDefault()
@@ -877,6 +1035,14 @@ function handleKeydown(e) {
   } else if (e.key === '?' || e.key === '/') {
     showHelp.value = !showHelp.value
   }
+}
+
+function onWindowKeydown(e) {
+  if (!store.viewerOpen) return
+  if (e.defaultPrevented) return
+  if (e.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return
+  if (e.key === 'Escape' && !showHelp.value && document.querySelector('.v-overlay--active')) return
+  handleKeydown(e)
 }
 
 // The stage grows into the space of hidden toolbars: watch its size and the bars' heights
@@ -904,11 +1070,13 @@ watch([topBarRef, bottomBarRef], () => {
 onMounted(() => {
   document.addEventListener('fullscreenchange', handleFullscreenChange)
   window.addEventListener('resize', measureStage)
+  window.addEventListener('keydown', onWindowKeydown)
 })
 
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
   window.removeEventListener('resize', measureStage)
+  window.removeEventListener('keydown', onWindowKeydown)
   stageObserver?.disconnect()
   barObserver?.disconnect()
   stopSlideshowTimer()

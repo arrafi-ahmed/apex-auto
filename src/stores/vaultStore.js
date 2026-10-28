@@ -103,7 +103,8 @@ export const useVaultStore = defineStore('vault', {
     activeMediaItem() {
       const list = this.displayMedia
       if (!list.length || this.viewerActiveIndex < 0) return null
-      return list[this.viewerActiveIndex] || null
+      const idx = Math.min(this.viewerActiveIndex, list.length - 1)
+      return list[idx] || null
     }
   },
 
@@ -247,6 +248,9 @@ export const useVaultStore = defineStore('vault', {
 
     updateInactivityCountdown() {
       if (!this.isAuthenticated) return
+      if (this.viewerOpen && this.slideshowPlaying) {
+        this.registerActivity()
+      }
       const elapsed = Math.floor((Date.now() - this.lastActivityTimestamp) / 1000)
       const totalSec = (this.autoLockMinutes || 5) * 60
       this.secondsRemainingUntilAutoLock = Math.max(0, totalSec - elapsed)
@@ -337,6 +341,7 @@ export const useVaultStore = defineStore('vault', {
       this.currentMedia = []
       this.selectedMediaIds = []
       this.isBatchMode = false
+      this.viewerActiveIndex = 0
       this.pushNav('album')
       await this.fetchMedia(album.id)
     },
@@ -811,12 +816,20 @@ export const useVaultStore = defineStore('vault', {
     },
 
     startSlideshow() {
-      if (!this.displayMedia.length) return
-      // If skip videos is on and current item is video, find first image
-      if (this.skipVideosInSlideshow && this.displayMedia[this.viewerActiveIndex]?.isVideo) {
-        const firstImgIndex = this.displayMedia.findIndex(m => !m.isVideo)
-        if (firstImgIndex !== -1) {
-          this.viewerActiveIndex = firstImgIndex
+      const list = this.displayMedia
+      if (!list.length) return
+      const hasImages = list.some(m => !m.isVideo)
+      const skipVideos = this.skipVideosInSlideshow && hasImages
+
+      if (!this.viewerOpen || this.viewerActiveIndex < 0 || this.viewerActiveIndex >= list.length) {
+        this.viewerActiveIndex = 0
+      }
+
+      if (skipVideos && list[this.viewerActiveIndex]?.isVideo) {
+        let nextImgIndex = list.findIndex((m, i) => i > this.viewerActiveIndex && !m.isVideo)
+        if (nextImgIndex === -1) nextImgIndex = list.findIndex(m => !m.isVideo)
+        if (nextImgIndex !== -1) {
+          this.viewerActiveIndex = nextImgIndex
         }
       }
       if (!this.viewerOpen) this.pushNav('viewer')
@@ -825,30 +838,35 @@ export const useVaultStore = defineStore('vault', {
     },
 
     nextMedia() {
-      if (!this.displayMedia.length) return
-      let nextIndex = this.viewerActiveIndex + 1
+      const list = this.displayMedia
+      if (!list.length) return
+      const currentIndex = Math.min(Math.max(0, this.viewerActiveIndex), list.length - 1)
+      const hasImages = list.some(m => !m.isVideo)
+      const skipVideos = this.slideshowPlaying && this.skipVideosInSlideshow && hasImages
 
-      if (this.slideshowPlaying && this.slideshowShuffle && this.displayMedia.length > 1) {
-        const pool = this.displayMedia
+      if (this.slideshowPlaying && this.slideshowShuffle && list.length > 1) {
+        const pool = list
           .map((m, i) => ({ m, i }))
-          .filter(({ m, i }) => i !== this.viewerActiveIndex && !(this.skipVideosInSlideshow && m.isVideo))
+          .filter(({ m, i }) => i !== currentIndex && !(skipVideos && m.isVideo))
         if (pool.length) {
           this.viewerActiveIndex = pool[Math.floor(Math.random() * pool.length)].i
           return
         }
       }
 
-      if (this.slideshowPlaying && this.skipVideosInSlideshow) {
-        while (nextIndex < this.displayMedia.length && this.displayMedia[nextIndex].isVideo) {
+      let nextIndex = currentIndex + 1
+
+      if (skipVideos) {
+        while (nextIndex < list.length && list[nextIndex].isVideo) {
           nextIndex++
         }
-        if (nextIndex >= this.displayMedia.length) {
+        if (nextIndex >= list.length) {
           // Loop back to first image
-          nextIndex = this.displayMedia.findIndex(m => !m.isVideo)
+          nextIndex = list.findIndex(m => !m.isVideo)
           if (nextIndex === -1) nextIndex = 0
         }
       } else {
-        if (nextIndex >= this.displayMedia.length) {
+        if (nextIndex >= list.length) {
           nextIndex = 0
         }
       }
@@ -856,17 +874,21 @@ export const useVaultStore = defineStore('vault', {
     },
 
     prevMedia() {
-      if (!this.displayMedia.length) return
-      let prevIndex = this.viewerActiveIndex - 1
+      const list = this.displayMedia
+      if (!list.length) return
+      const currentIndex = Math.min(Math.max(0, this.viewerActiveIndex), list.length - 1)
+      const hasImages = list.some(m => !m.isVideo)
+      const skipVideos = this.slideshowPlaying && this.skipVideosInSlideshow && hasImages
+      let prevIndex = currentIndex - 1
 
-      if (this.slideshowPlaying && this.skipVideosInSlideshow) {
-        while (prevIndex >= 0 && this.displayMedia[prevIndex].isVideo) {
+      if (skipVideos) {
+        while (prevIndex >= 0 && list[prevIndex].isVideo) {
           prevIndex--
         }
         if (prevIndex < 0) {
           // Loop to last image
-          for (let i = this.displayMedia.length - 1; i >= 0; i--) {
-            if (!this.displayMedia[i].isVideo) {
+          for (let i = list.length - 1; i >= 0; i--) {
+            if (!list[i].isVideo) {
               prevIndex = i
               break
             }
@@ -875,7 +897,7 @@ export const useVaultStore = defineStore('vault', {
         }
       } else {
         if (prevIndex < 0) {
-          prevIndex = this.displayMedia.length - 1
+          prevIndex = list.length - 1
         }
       }
       this.viewerActiveIndex = prevIndex

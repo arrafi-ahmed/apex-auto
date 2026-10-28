@@ -77,4 +77,29 @@ test.describe('viewer on a phone', () => {
     await page.locator('.ax-menu-item', { hasText: /^5s$/ }).tap()
     await expect(button).toContainText('5s')
   })
+
+  test('slideshow continues playing on a phone when tapping screen, zooming, or opening details', async ({ page }) => {
+    await openViewerOn(page, 'wide.jpg')
+    await expect(page.locator('html')).not.toHaveAttribute('data-vt', 'running')
+
+    const intervalBtn = page.getByLabel('Seconds per slide')
+    await intervalBtn.tap()
+    await page.locator('.ax-menu-item', { hasText: /^1s$/ }).tap()
+
+    // Start slideshow
+    await page.locator('.controls .group.center .ax-btn').first().tap()
+    await expect(page.locator('.progress')).toBeVisible()
+
+    // Tap stage to hide HUD; slideshow must keep advancing
+    await page.touchscreen.tap(190, 400)
+    await expect(page.locator('.bar.top')).toHaveClass(/is-hidden/)
+    const initialCount = await page.locator('.bar.top .count').first().textContent()
+    await expect.poll(async () => await page.locator('.bar.top .count').first().textContent(), { timeout: 3500 }).not.toBe(initialCount)
+
+    // Tap stage again to bring HUD back; slideshow still advances
+    await page.touchscreen.tap(190, 400)
+    await expect(page.locator('.bar.top')).not.toHaveClass(/is-hidden/)
+    const secondCount = await page.locator('.bar.top .count').first().textContent()
+    await expect.poll(async () => await page.locator('.bar.top .count').first().textContent(), { timeout: 3500 }).not.toBe(secondCount)
+  })
 })
