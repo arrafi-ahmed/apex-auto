@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { signIn, createAlbum, uploadViaApi, makeImage, openAlbum, uniqueTitle, zoomValue } from './helpers.js'
+import { signIn, createAlbum, uploadViaApi, makeImage, makeVideo, openAlbum, uniqueTitle, zoomValue } from './helpers.js'
 
 const PRESETS = [10, 25, 50, 75, 100, 125, 150, 200, 400, 800]
 
@@ -185,5 +185,31 @@ test.describe('viewer controls (desktop)', () => {
     await expect(page.locator('.controls .group.center button', { hasText: 'Slideshow' })).toBeVisible()
     await page.keyboard.press('Space')
     await expect(page.locator('.controls .group.center button', { hasText: 'Pause' })).toBeVisible()
+  })
+
+  test('video viewer shows Replay loop button and toggles looping via click and L shortcut', async ({ page }) => {
+    await signIn(page)
+    const title = uniqueTitle('VideoLoop')
+    const albumId = await createAlbum(page, title)
+    await uploadViaApi(page, albumId, await makeVideo(1, { name: 'clip.webm' }))
+    await openAlbum(page, title)
+
+    await page.locator('.tile[aria-label="clip"]').click()
+    await expect(page.locator('.viewer video')).toBeVisible()
+
+    const loopBtn = page.getByRole('button', { name: 'Replay loop' })
+    await expect(loopBtn).toBeVisible()
+    await expect(loopBtn).not.toHaveClass(/is-active/)
+    expect(await page.locator('.viewer video').evaluate(v => v.loop)).toBe(false)
+
+    // Click toggles loop on
+    await loopBtn.click()
+    await expect(loopBtn).toHaveClass(/is-active/)
+    expect(await page.locator('.viewer video').evaluate(v => v.loop)).toBe(true)
+
+    // Pressing L toggles loop off
+    await page.keyboard.press('l')
+    await expect(loopBtn).not.toHaveClass(/is-active/)
+    expect(await page.locator('.viewer video').evaluate(v => v.loop)).toBe(false)
   })
 })

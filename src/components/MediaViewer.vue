@@ -81,6 +81,7 @@
             :src="`/media-stream/${currentMedia.id}`"
             :poster="`/thumb/${currentMedia.id}`"
             :muted="isMuted"
+            :loop="isLooping"
             controls autoplay playsinline
             @loadedmetadata="onVideoLoaded"
             @ended="onVideoEnded"
@@ -131,7 +132,7 @@
         </button>
       </div>
 
-      <div class="controls">
+      <div class="controls" :class="{ 'is-video': currentMedia?.isVideo }">
         <div class="group zoom-group">
           <button class="ax-icon-btn" :disabled="percent <= PRESETS[0]" title="Zoom out" @click="zoomOut"><v-icon icon="mdi-minus" size="18"></v-icon></button>
           <div class="zoom-field" :class="{ 'is-editing': zoomDraft !== null }">
@@ -184,9 +185,21 @@
         </div>
 
         <div class="group end">
-          <button v-if="currentMedia?.isVideo" class="ax-icon-btn" title="Mute (M)" @click="toggleMute">
-            <v-icon :icon="isMuted ? 'mdi-volume-off' : 'mdi-volume-high'" size="18"></v-icon>
-          </button>
+          <template v-if="currentMedia?.isVideo">
+            <button
+              class="ax-icon-btn"
+              :class="{ 'is-active': isLooping }"
+              :aria-pressed="isLooping"
+              :title="isLooping ? 'Disable replay loop (L)' : 'Replay loop (L)'"
+              aria-label="Replay loop"
+              @click="toggleLoop"
+            >
+              <v-icon icon="mdi-repeat" size="18"></v-icon>
+            </button>
+            <button class="ax-icon-btn" title="Mute (M)" @click="toggleMute">
+              <v-icon :icon="isMuted ? 'mdi-volume-off' : 'mdi-volume-high'" size="18"></v-icon>
+            </button>
+          </template>
         </div>
       </div>
     </div>
@@ -206,6 +219,7 @@
           <li><span>Fit page / actual size</span><kbd>Z</kbd></li>
           <li><span>Download original</span><kbd>D</kbd></li>
           <li><span>Delete (with undo)</span><kbd>Del</kbd></li>
+          <li><span>Replay loop video</span><kbd>L</kbd></li>
           <li><span>Mute video</span><kbd>M</kbd></li>
           <li><span>Fullscreen</span><kbd>F</kbd></li>
           <li><span>Close</span><kbd>Esc</kbd></li>
@@ -237,6 +251,7 @@ const showHelp = ref(false)
 const showInfo = ref(false)
 const dimensions = ref(null)
 const isMuted = ref(false)
+const isLooping = ref(false)
 const fullLoaded = ref(false)
 
 // Zoom & pan. `scale` is relative to "fit to page" (1 = whole image visible); the percentage
@@ -427,6 +442,7 @@ function ensureVideoPlayback() {
   const v = videoPlayerRef.value
   if (!v || !currentMedia.value?.isVideo) return
   v.muted = isMuted.value
+  v.loop = isLooping.value
   const playPromise = v.play()
   if (playPromise && typeof playPromise.catch === 'function') {
     playPromise.catch(() => {
@@ -550,8 +566,8 @@ function startSlideshowTimer() {
     const hasImages = store.displayMedia.some(m => !m.isVideo)
     const skipVideos = store.skipVideosInSlideshow && hasImages
 
-    // If a video is actively playing (and not set to be skipped), let it play to completion
-    if (currentMedia.value?.isVideo && !skipVideos) {
+    // If a video is actively playing (and not set to be skipped, or explicitly looping), let it play
+    if (currentMedia.value?.isVideo && (!skipVideos || isLooping.value)) {
       const v = videoPlayerRef.value
       if (v && !v.paused && !v.ended && !v.error) {
         if (v.duration > 0 && Number.isFinite(v.duration)) {
@@ -584,6 +600,11 @@ function stopSlideshowTimer() {
 }
 
 function onVideoEnded() {
+  if (isLooping.value && videoPlayerRef.value) {
+    videoPlayerRef.value.currentTime = 0
+    ensureVideoPlayback()
+    return
+  }
   if (!store.slideshowPlaying) return
   elapsedMs = 0
   progressPercent.value = 0
@@ -609,6 +630,21 @@ function setRotationInterval(sec) {
   store.slideshowInterval = sec
   if (store.slideshowPlaying) startSlideshowTimer()
   showHud()
+}
+
+function toggleLoop() {
+  if (!currentMedia.value?.isVideo) return
+  isLooping.value = !isLooping.value
+  const v = videoPlayerRef.value
+  if (v) {
+    v.loop = isLooping.value
+    if (isLooping.value && (v.ended || v.paused)) {
+      if (v.ended) v.currentTime = 0
+      ensureVideoPlayback()
+    }
+  }
+  store.showNotice(isLooping.value ? 'Video loop enabled' : 'Video loop disabled', 'info')
+  if (hudVisible.value) showHud()
 }
 
 function toggleMute() {
@@ -1027,6 +1063,8 @@ function handleKeydown(e) {
     toggleFullScale()
   } else if (e.key === 'd' || e.key === 'D') {
     downloadCurrentMedia()
+  } else if (e.key === 'l' || e.key === 'L') {
+    toggleLoop()
   } else if (e.key === 'm' || e.key === 'M') {
     toggleMute()
   } else if (e.key === 's' || e.key === 'S') {
@@ -1253,6 +1291,8 @@ kbd {
   .controls .group.center > .ax-icon-btn { display: none; }
   .btn-label { display: none; }
   .controls .group.end { display: none; }
+  .controls.is-video .group.zoom-group { display: none; }
+  .controls.is-video .group.end { display: flex; flex: 1 1 auto; justify-content: flex-start; gap: 4px; order: -1; }
   .zoom-input { font-size: 16px; width: 42px; }
 
   /* Mobile bottom sheet for info */

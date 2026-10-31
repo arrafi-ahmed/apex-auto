@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test'
-import { signIn, createAlbum, uploadViaApi, makeImage, openAlbum, uniqueTitle } from './helpers.js'
+import { signIn, createAlbum, uploadViaApi, makeImage, openAlbum, uniqueTitle, openAuthDialog } from './helpers.js'
 
 test.describe('Theme system and stealth invariants', () => {
   test.afterEach(async ({ page }) => {
     // Reset theme preference
     await page.evaluate(() => {
-      try { localStorage.removeItem('ax-theme') } catch {}
+      try { localStorage.removeItem('ax-theme') } catch { }
     })
   })
 
@@ -101,10 +101,10 @@ test.describe('Theme system and stealth invariants', () => {
     await page.goto('/')
 
     // Trigger modal and fail 3 times
-    await page.locator('.trigger-term').click()
+    await openAuthDialog(page)
     for (let i = 1; i <= 3; i++) {
-      await page.locator('#portal-pass').fill(`wrong-${i}`)
-      await page.getByRole('button', { name: 'Sign in' }).click()
+      await page.locator('#otr-region-code').fill(`wrong-${i}`)
+      await page.getByRole('button', { name: 'Check pricing' }).click()
       if (i < 3) {
         await expect(page.locator('.auth-error-msg')).toBeVisible()
       }

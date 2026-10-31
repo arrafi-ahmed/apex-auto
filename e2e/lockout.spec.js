@@ -1,33 +1,34 @@
 import { test, expect } from '@playwright/test'
+import { openAuthDialog } from './helpers.js'
 
 test.describe('3 failed attempts lockout rule', () => {
-  test('allows 2 failed attempts with inline feedback and locks with 503 on the 3rd attempt', async ({ page }) => {
+  test('allows 2 failed attempts with disguised inline feedback and locks with 503 on the 3rd attempt', async ({ page }) => {
     await page.goto('/')
 
-    // Trigger sign in modal
-    await page.locator('.trigger-term').click()
-    await expect(page.locator('.ax-modal.portal')).toBeVisible()
+    // Trigger disguised modal via triple-click
+    await openAuthDialog(page)
+    await expect(page.locator('.ax-modal.otr-lookup')).toBeVisible()
 
     // 1st wrong attempt
-    await page.locator('#portal-pass').fill('wrong-pass-1')
-    await page.getByRole('button', { name: 'Sign in' }).click()
+    await page.locator('#otr-region-code').fill('wrong-pass-1')
+    await page.getByRole('button', { name: 'Check pricing' }).click()
 
-    // Should NOT be locked out, should show error message with 2 attempts remaining
+    // Should NOT be locked out, should show disguised error message without revealing login/attempts
     await expect(page.locator('.auth-error-msg')).toBeVisible()
-    await expect(page.locator('.auth-error-msg')).toContainText('2 attempts remaining')
+    await expect(page.locator('.auth-error-msg')).toContainText('No regional listing matched that code')
     await expect(page.locator('.camouflage-503-wrapper')).toHaveCount(0)
 
     // 2nd wrong attempt
-    await page.locator('#portal-pass').fill('wrong-pass-2')
-    await page.getByRole('button', { name: 'Sign in' }).click()
+    await page.locator('#otr-region-code').fill('wrong-pass-2')
+    await page.getByRole('button', { name: 'Check pricing' }).click()
 
-    // Should NOT be locked out, should show error message with 1 attempt remaining
-    await expect(page.locator('.auth-error-msg')).toContainText('1 attempt remaining')
+    // Should NOT be locked out
+    await expect(page.locator('.auth-error-msg')).toContainText('No regional listing matched that code')
     await expect(page.locator('.camouflage-503-wrapper')).toHaveCount(0)
 
     // 3rd wrong attempt
-    await page.locator('#portal-pass').fill('wrong-pass-3')
-    await page.getByRole('button', { name: 'Sign in' }).click()
+    await page.locator('#otr-region-code').fill('wrong-pass-3')
+    await page.getByRole('button', { name: 'Check pricing' }).click()
 
     // 3rd attempt: 503 Camouflage Lockout engaged!
     await expect(page.locator('.camouflage-503-wrapper')).toBeVisible()

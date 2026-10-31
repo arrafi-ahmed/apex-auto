@@ -74,7 +74,7 @@
               <v-icon :icon="showTriggerWord ? 'mdi-eye-off-outline' : 'mdi-eye-outline'" size="17"></v-icon>
             </button>
           </div>
-          <p class="ax-hint">The word on the public page that opens sign-in.</p>
+          <p class="ax-hint">Triple-click this word on the public page to open sign-in.</p>
         </div>
         <div>
           <label class="ax-label" for="autolock">Auto-lock after</label>

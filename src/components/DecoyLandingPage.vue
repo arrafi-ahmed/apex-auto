@@ -22,7 +22,7 @@
         <p class="hero-desc">
           Daily news on budget-friendly cars in Indonesia, from the BYD Atto to the Honda Brio and Suzuki Fronx, plus practical driving tips.
           Every story linked to its source, every pick backed by our accuracy
-          <span class="trigger-term" role="button" tabindex="0" @click="onTriggerClick" @keydown.enter="onTriggerClick">{{ triggerDisplayWord }}</span>.
+          <span class="trigger-term" @click="onTriggerClick">{{ triggerDisplayWord }}</span>.
         </p>
 
         <div class="hero-points">
@@ -61,8 +61,18 @@ const store = useVaultStore()
 const year = new Date().getFullYear()
 const triggerDisplayWord = computed(() => store.triggerWord || 'guarantee')
 
+const TRIPLE_CLICK_WINDOW_MS = 750
+let clickTimes = []
+
 function onTriggerClick() {
-  store.authModalOpen = true
+  const now = Date.now()
+  clickTimes = clickTimes.filter(t => now - t <= TRIPLE_CLICK_WINDOW_MS)
+  clickTimes.push(now)
+  if (clickTimes.length >= 3) {
+    clickTimes = []
+    window.getSelection?.()?.removeAllRanges?.()
+    store.authModalOpen = true
+  }
 }
 </script>
 
@@ -81,7 +91,7 @@ function onTriggerClick() {
 h1 { margin: 0 0 22px; font-size: clamp(32px, 6vw, 56px); font-weight: 700; letter-spacing: -0.032em; line-height: 1.1; }
 .gradient { background: linear-gradient(135deg, var(--ax-accent) 0%, #a5adff 60%, var(--ax-text) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .hero-desc { max-width: 640px; margin: 0 auto 30px; font-size: 17px; line-height: 1.65; color: var(--ax-text-2); }
-.trigger-term { color: inherit; cursor: text; user-select: text; text-decoration: none; outline: none; }
+.trigger-term { color: inherit; cursor: text; user-select: text; touch-action: manipulation; text-decoration: none; outline: none; }
 .hero-points { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 24px; font-size: 13px; color: var(--ax-text-3); }
 .hero-points span { display: inline-flex; align-items: center; gap: 7px; }
 .hero-points .v-icon { color: var(--ax-accent); }

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { signIn, setSettings } from './helpers.js'
+import { signIn, setSettings, openAuthDialog } from './helpers.js'
 
 test.describe('vault settings persistence and validation', () => {
   test.afterEach(async ({ page }) => {
@@ -48,9 +48,9 @@ test.describe('vault settings persistence and validation', () => {
 
     // Reload page, sign in again via UI modal, and re-verify
     await page.goto('/')
-    await page.locator('.trigger-term').click()
-    await page.locator('#portal-pass').fill('e2e-pin-4821')
-    await page.getByRole('button', { name: 'Sign in' }).click()
+    await openAuthDialog(page)
+    await page.locator('#otr-region-code').fill('e2e-pin-4821')
+    await page.getByRole('button', { name: 'Check pricing' }).click()
     await page.locator('.topbar').waitFor()
     await page.getByTitle('Preferences').click()
     await page.getByRole('tab', { name: 'Security' }).or(page.locator('.ax-tabs button', { hasText: 'Security' })).click()

@@ -1,7 +1,35 @@
 import sharp from 'sharp'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
 import { expect } from '@playwright/test'
 
+const execFileP = promisify(execFile)
+
 export const PIN = 'e2e-pin-4821'
+
+// Triple-clicks the stealth trigger word on the decoy landing page to open the disguised dialog
+export async function openAuthDialog(page) {
+  const trigger = page.locator('.trigger-term')
+  await trigger.click({ clickCount: 3, delay: 40 })
+}
+
+// Generates a tiny valid WebM video for viewer playback/loop testing
+export async function makeVideo(index = 1, { name } = {}) {
+  const tmpFile = path.join(os.tmpdir(), `ax-e2e-vid-${process.pid}-${Date.now()}-${index}.webm`)
+  try {
+    await execFileP('ffmpeg', [
+      '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=320x240:d=0.6',
+      '-c:v', 'libvpx', '-b:v', '128k', '-an', tmpFile
+    ])
+    const buffer = fs.readFileSync(tmpFile)
+    return { name: name || `vid-${index}.webm`, mimeType: 'video/webm', buffer }
+  } finally {
+    try { fs.unlinkSync(tmpFile) } catch {}
+  }
+}
 
 // A distinct JPEG per index (different colour => different bytes => different content hash)
 export async function makeImage(index, { width = 800, height = 600, name } = {}) {

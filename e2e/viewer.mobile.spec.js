@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { signIn, createAlbum, uploadViaApi, makeImage, openAlbum, uniqueTitle, zoomValue } from './helpers.js'
+import { signIn, createAlbum, uploadViaApi, makeImage, makeVideo, openAlbum, uniqueTitle, zoomValue } from './helpers.js'
 
 async function openViewerOn(page, name) {
   await signIn(page)
@@ -104,5 +104,25 @@ test.describe('viewer on a phone', () => {
     await expect(page.locator('.bar.top')).not.toHaveClass(/is-hidden/)
     const secondCount = await page.locator('.bar.top .count').first().textContent()
     await expect.poll(async () => await page.locator('.bar.top .count').first().textContent(), { timeout: 3500 }).not.toBe(secondCount)
+  })
+
+  test('video replay loop button is visible and toggles loop on a phone without overflow', async ({ page }) => {
+    await signIn(page)
+    const title = uniqueTitle('PhoneVideo')
+    const albumId = await createAlbum(page, title)
+    await uploadViaApi(page, albumId, await makeVideo(1, { name: 'clip.webm' }))
+    await openAlbum(page, title)
+
+    await page.locator('.tile[aria-label="clip"]').tap()
+    await expect(page.locator('.viewer video')).toBeVisible()
+
+    const loopBtn = page.getByRole('button', { name: 'Replay loop' })
+    await expect(loopBtn).toBeVisible()
+    const box = await loopBtn.boundingBox()
+    expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize().width)
+
+    await loopBtn.tap()
+    await expect(loopBtn).toHaveClass(/is-active/)
+    expect(await page.locator('.viewer video').evaluate(v => v.loop)).toBe(true)
   })
 })
