@@ -159,6 +159,7 @@
             </v-menu>
           </div>
           <button class="ax-icon-btn" :disabled="percent >= PRESETS[PRESETS.length - 1]" title="Zoom in" @click="zoomIn"><v-icon icon="mdi-plus" size="18"></v-icon></button>
+          <button class="ax-icon-btn zoom-actual font-mono tabular" :class="{ 'is-active': percent === 100 }" title="Actual size (100%)" aria-label="Actual size (100%)" @click="setPercent(100)">100%</button>
           <button class="ax-icon-btn zoom-fit" title="Fit to page" @click="resetZoom"><v-icon icon="mdi-fit-to-screen-outline" size="18"></v-icon></button>
         </div>
 
@@ -1155,6 +1156,10 @@ onUnmounted(() => {
 .zoom-caret {
   display: grid; place-items: center; width: 26px; height: 26px; margin-left: 2px;
   padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ax-text-2); cursor: pointer;
+}
+.zoom-actual {
+  width: auto; min-width: 34px; padding: 0 7px;
+  font-size: 11.5px; font-weight: 600; letter-spacing: -0.02em;
 }
 .zoom-menu { min-width: 170px; max-height: min(70vh, 460px); overflow-y: auto; }
 .zoom-menu .ax-menu-item.is-current { color: var(--ax-accent); background: var(--ax-accent-soft); }

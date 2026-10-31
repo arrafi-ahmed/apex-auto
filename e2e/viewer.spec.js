@@ -83,6 +83,22 @@ test.describe('viewer zoom (desktop)', () => {
     await expect.poll(() => zoomValue(page)).toBeLessThan(up)
   })
 
+  test('100% button sets the image to actual size and Fit to page restores fit', async ({ page }) => {
+    await openViewerOn(page, 'wide.jpg')
+    const fit = await zoomValue(page)
+    expect(fit).toBeLessThan(100)
+
+    const actualBtn = page.getByTitle('Actual size (100%)', { exact: true })
+    await expect(actualBtn).toBeVisible()
+    await actualBtn.click()
+    await expect.poll(() => zoomValue(page)).toBe(100)
+    await expect(actualBtn).toHaveClass(/is-active/)
+
+    await page.getByTitle('Fit to page', { exact: true }).click()
+    await expect.poll(() => zoomValue(page)).toBe(fit)
+    await expect(actualBtn).not.toHaveClass(/is-active/)
+  })
+
   test('Z toggles the zoom and Escape closes the viewer', async ({ page }) => {
     await openViewerOn(page, 'wide.jpg')
     const fit = await zoomValue(page)

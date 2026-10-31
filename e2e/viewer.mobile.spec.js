@@ -55,7 +55,7 @@ test.describe('viewer on a phone', () => {
   test('zoom buttons, the editable size and its menu are available on a phone', async ({ page }) => {
     await openViewerOn(page, 'wide.jpg')
     const width = page.viewportSize().width
-    for (const locator of [page.locator('.zoom-input'), page.getByTitle('Zoom in', { exact: true }), page.getByTitle('Zoom out', { exact: true }), page.locator('.zoom-caret')]) {
+    for (const locator of [page.locator('.zoom-input'), page.getByTitle('Zoom in', { exact: true }), page.getByTitle('Zoom out', { exact: true }), page.getByTitle('Actual size (100%)', { exact: true }), page.locator('.zoom-caret')]) {
       await expect(locator).toBeVisible()
       const box = await locator.boundingBox()
       expect(box.x + box.width).toBeLessThanOrEqual(width)
@@ -63,6 +63,9 @@ test.describe('viewer on a phone', () => {
     const fit = await zoomValue(page)
     await page.getByTitle('Zoom in', { exact: true }).tap()
     await expect.poll(() => zoomValue(page)).toBeGreaterThan(fit)
+
+    await page.getByTitle('Actual size (100%)', { exact: true }).tap()
+    await expect.poll(() => zoomValue(page)).toBe(100)
 
     await page.locator('.zoom-caret').tap()
     await page.locator('.zoom-menu .ax-menu-item', { hasText: /^200%$/ }).tap()
